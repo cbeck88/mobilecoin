@@ -833,7 +833,10 @@ pub struct OwnedTxOut {
     /// The value of the TxOut, computed when we matched this tx_out
     /// successfully against our account key.
     pub value: u64,
-    // The subaddress index this tx_out was sent to.
+    /// The token id of the TxOut, compute when we matches this tx out
+    /// successfully against our account key.
+    pub token_id: u32,
+    /// The subaddress index this tx_out was sent to.
     pub subaddress_index: u64,
     /// The key image that we computed when matching this tx_out against our
     /// account key.
@@ -863,7 +866,7 @@ impl OwnedTxOut {
         let decompressed_tx_pub = RistrettoPublic::try_from(&tx_out.public_key)?;
         let shared_secret =
             get_tx_out_shared_secret(account_key.view_private_key(), &decompressed_tx_pub);
-        let (value, _blinding) = tx_out.amount.get_value(&shared_secret)?;
+        let (amount_data, _blinding) = tx_out.amount.get_value(&shared_secret)?;
 
         // Calculate the subaddress spend public key for tx_out.
         let tx_out_target_key = RistrettoPublic::try_from(&tx_out.target_key)?;
@@ -895,7 +898,8 @@ impl OwnedTxOut {
             block_index: rec.block_index,
             tx_out,
             key_image,
-            value,
+            value: amount_data.value,
+            token_id: amount_data.token_id,
             subaddress_index: *subaddress_index,
             status,
         })

@@ -63,7 +63,7 @@ mod tests {
         };
 
         let mut transaction_builder =
-            TransactionBuilder::new(MockFogResolver::default(), EmptyMemoBuilder::default());
+            TransactionBuilder::new(0, MockFogResolver::default(), EmptyMemoBuilder::default());
 
         let ring: Vec<TxOut> = minted_outputs.clone();
         let public_key = RistrettoPublic::try_from(&minted_outputs[0].public_key).unwrap();

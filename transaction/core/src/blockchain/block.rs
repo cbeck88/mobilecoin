@@ -225,6 +225,7 @@ mod block_tests {
             .map(|_i| {
                 TxOut::new(
                     45,
+                    0,
                     &recipient.default_subaddress(),
                     &RistrettoPrivate::from_random(rng),
                     Default::default(),

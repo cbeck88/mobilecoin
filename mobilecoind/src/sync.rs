@@ -384,10 +384,13 @@ fn match_tx_outs_into_utxos(
         let shared_secret =
             get_tx_out_shared_secret(account_key.view_private_key(), &tx_public_key);
 
-        let (value, _blinding) = tx_out
+        let (amount_data, _blinding) = tx_out
             .amount
             .get_value(&shared_secret)
             .expect("Malformed amount"); // TODO
+
+        // FIXME: We should not discard amount_data.token_id
+        let value = amount_data.value;
 
         let onetime_private_key = recover_onetime_private_key(
             &tx_public_key,

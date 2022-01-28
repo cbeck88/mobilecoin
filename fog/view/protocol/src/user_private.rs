@@ -145,8 +145,10 @@ mod testing {
 
         // Arbitrary TxOut
         let tx_private_key = RistrettoPrivate::from_random(&mut rng);
+        let token_id = 0;
         let txo = TxOut::new(
             10,
+            token_id,
             &recipient.default_subaddress(),
             &tx_private_key,
             hint.encrypt(&ingest_public, &mut rng),

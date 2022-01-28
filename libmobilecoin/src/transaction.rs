@@ -6,7 +6,7 @@ use mc_account_keys::PublicAddress;
 use mc_crypto_keys::{ReprBytes, RistrettoPrivate, RistrettoPublic};
 use mc_fog_report_validation::FogResolver;
 use mc_transaction_core::{
-    get_tx_out_shared_secret, get_value_mask,
+    get_tx_out_shared_secret,
     onetime_keys::{recover_onetime_private_key, recover_public_subaddress_spend_key},
     ring_signature::KeyImage,
     tx::{TxOut, TxOutConfirmationNumber, TxOutMembershipProof},
@@ -40,9 +40,10 @@ pub extern "C" fn mc_tx_out_reconstruct_commitment(
         let tx_out_public_key = RistrettoPublic::try_from_ffi(&tx_out_public_key)?;
 
         let shared_secret = get_tx_out_shared_secret(&view_private_key, &tx_out_public_key);
-        let value = (tx_out_amount.masked_value as u64) ^ get_value_mask(&shared_secret);
 
-        let amount: Amount = Amount::new(value, &shared_secret)?;
+        // FIXME: McTxOutAmount should include the masked_token_id bytes, which are 0 or
+        // 4 bytes For now zero to avoid breaking changes to FFI
+        let (amount, _) = Amount::reconstruct(tx_out_amount.masked_value, &[], &shared_secret)?;
 
         let out_tx_out_commitment = out_tx_out_commitment
             .into_mut()
@@ -59,22 +60,22 @@ pub extern "C" fn mc_tx_out_reconstruct_commitment(
 /// * `view_private_key` - must be a valid 32-byte Ristretto-format scalar.
 #[no_mangle]
 pub extern "C" fn mc_tx_out_matches_any_subaddress(
-    tx_out_amount: FfiRefPtr<McTxOutAmount>,
+    _tx_out_amount: FfiRefPtr<McTxOutAmount>,
     tx_out_public_key: FfiRefPtr<McBuffer>,
     view_private_key: FfiRefPtr<McBuffer>,
     out_matches: FfiMutPtr<bool>,
 ) -> bool {
     ffi_boundary(|| {
-        let view_private_key = RistrettoPrivate::try_from_ffi(&view_private_key)
+        let _view_private_key = RistrettoPrivate::try_from_ffi(&view_private_key)
             .expect("view_private_key is not a valid RistrettoPrivate");
 
         let mut matches = false;
-        if let Ok(public_key) = RistrettoPublic::try_from_ffi(&tx_out_public_key) {
-            let shared_secret = get_tx_out_shared_secret(&view_private_key, &public_key);
-            let value = (tx_out_amount.masked_value as u64) ^ get_value_mask(&shared_secret);
-            let amount: Amount =
-                Amount::new(value, &shared_secret).expect("could not create amount object");
-            matches = amount.get_value(&shared_secret).is_ok()
+        if let Ok(_public_key) = RistrettoPublic::try_from_ffi(&tx_out_public_key) {
+            // FIXME: This function doesn't make sense unless we have access to the
+            // amount.commitment from the TxOut, or the commitment_crc32 from the fog tx
+            // out, so that we have some way to check if we recovered the
+            // correct commitment.
+            matches = true;
         }
         *out_matches.into_mut() = matches;
     })
@@ -170,11 +171,11 @@ pub extern "C" fn mc_tx_out_get_value(
         let view_private_key = RistrettoPrivate::try_from_ffi(&view_private_key)?;
 
         let shared_secret = get_tx_out_shared_secret(&view_private_key, &tx_out_public_key);
-        let value = (tx_out_amount.masked_value as u64) ^ get_value_mask(&shared_secret);
-        let amount: Amount = Amount::new(value, &shared_secret)?;
-        let (val, _blinding) = amount.get_value(&shared_secret)?;
+        let (_amount, amount_data) =
+            Amount::reconstruct(tx_out_amount.masked_value, &[], &shared_secret)?;
 
-        *out_value.into_mut() = val;
+        // FIXME: This should also return the amount_data.token_id
+        *out_value.into_mut() = amount_data.value;
         Ok(())
     })
 }
@@ -323,7 +324,8 @@ pub extern "C" fn mc_transaction_builder_create(
         // TODO: After servers are deployed that are supporting the memos,
         // Enable recoverable transaction history by configuring an RTHMemoBuilder
         let memo_builder = NoMemoBuilder::default();
-        let mut transaction_builder = TransactionBuilder::new(fog_resolver, memo_builder);
+        // TODO: Take a token id option here instead of passing 0 (MOB)
+        let mut transaction_builder = TransactionBuilder::new(0, fog_resolver, memo_builder);
         transaction_builder
             .set_fee(fee)
             .expect("failure not expected");

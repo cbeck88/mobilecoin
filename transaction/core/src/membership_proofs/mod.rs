@@ -1,5 +1,7 @@
 // Copyright (c) 2018-2021 The MobileCoin Foundation
 
+//! Validation for merkle proofs of membership
+
 #![allow(clippy::if_same_then_else)]
 
 extern crate alloc;
@@ -25,6 +27,7 @@ pub use errors::Error as MembershipProofError;
 pub use range::{Range, RangeError};
 
 lazy_static! {
+    /// A value hashed in connection to a nil node in the tree
     pub static ref NIL_HASH: [u8; 32] = hash_nil();
 }
 

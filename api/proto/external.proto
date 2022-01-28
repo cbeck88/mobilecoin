@@ -175,6 +175,9 @@ message Amount {
 
     // `masked_value = value XOR_8 Blake2B("value_mask" || shared_secret)`
     fixed64 masked_value = 2;
+
+    // `masked_token_id = token_id XOR_8 Blake2B("token_id_mask" || shared_secret)`
+    bytes masked_token_id = 3;
 }
 
 // The bytes of encrypted fog hint
@@ -224,10 +227,13 @@ message TxPrefix {
     repeated TxOut outputs = 2;
 
     // Fee paid to the foundation for this transaction
-    uint64 fee = 3;
+    fixed64 fee = 3;
+
+    // Token id for this transaction
+    fixed32 token_id = 4;
 
     // The block index at which this transaction is no longer valid.
-    uint64 tombstone_block = 4;
+    uint64 tombstone_block = 5;
 }
 
 message RingMLSAG {

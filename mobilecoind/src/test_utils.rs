@@ -164,6 +164,7 @@ pub fn add_block_to_ledger_db(
             let mut result = TxOut::new(
                 // TODO: allow for subaddress index!
                 output_value,
+                0,
                 recipient,
                 &RistrettoPrivate::from_random(rng),
                 Default::default(),

@@ -245,7 +245,14 @@ pub fn validate_signature<R: RngCore + CryptoRng>(
     let message = tx_prefix_hash.as_bytes();
 
     tx.signature
-        .verify(message, &rings, &output_commitments, tx.prefix.fee, rng)
+        .verify(
+            message,
+            &rings,
+            &output_commitments,
+            tx.prefix.fee,
+            tx.prefix.token_id,
+            rng,
+        )
         .map_err(TransactionValidationError::InvalidTransactionSignature)
 }
 
