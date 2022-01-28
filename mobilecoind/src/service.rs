@@ -559,10 +559,13 @@ impl<T: BlockchainConnection + UserTxConnection + 'static, FPR: FogPubkeyResolve
         let shared_secret =
             get_tx_out_shared_secret(account_key.view_private_key(), &tx_public_key);
 
-        let (value, _blinding) = tx_out
+        let (amount_data, _blinding) = tx_out
             .amount
             .get_value(&shared_secret)
             .map_err(|err| rpc_internal_error("amount.get_value", err, &self.logger))?;
+
+        // FIXME: We should not discard amount_data.token_id
+        let value = amount_data.value;
 
         let onetime_private_key = recover_onetime_private_key(
             &tx_public_key,
@@ -2805,7 +2808,7 @@ mod test {
         // Insert into database.
         let monitor_id = mobilecoind_db.add_monitor(&data).unwrap();
         let mut transaction_builder =
-            TransactionBuilder::new(MockFogResolver::default(), NoMemoBuilder::default());
+            TransactionBuilder::new(0, MockFogResolver::default(), NoMemoBuilder::default());
         let (tx_out, tx_confirmation) = transaction_builder
             .add_output(10, &receiver.subaddress(0), &mut rng)
             .unwrap();
@@ -3423,7 +3426,7 @@ mod test {
             ] {
                 // Find the first output belonging to the account, and get its value.
                 // This assumes that each output is sent to a different account key.
-                let (value, _blinding) = tx
+                let (amount_data, _blinding) = tx
                     .prefix
                     .outputs
                     .iter()
@@ -3438,7 +3441,8 @@ mod test {
                     })
                     .expect("There should be an output belonging to the account key.");
 
-                assert_eq!(value, *expected_value);
+                assert_eq!(amount_data.token_id, 0);
+                assert_eq!(amount_data.value, *expected_value);
             }
 
             // Santity test fee
@@ -3725,8 +3729,9 @@ mod test {
         let tx_public_key = RistrettoPublic::try_from(&tx_out.public_key).unwrap();
         let shared_secret =
             get_tx_out_shared_secret(data.account_key.view_private_key(), &tx_public_key);
-        let (value, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
-        assert_eq!(value, tx_proposal.outlays[0].value);
+        let (amount_data, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
+        assert_eq!(amount_data.value, tx_proposal.outlays[0].value);
+        assert_eq!(amount_data.token_id, 0);
 
         // Santity test fee
         assert_eq!(tx_proposal.fee(), Mob::MINIMUM_FEE);
@@ -3803,8 +3808,9 @@ mod test {
         let tx_out = &tx_proposal.tx.prefix.outputs[0];
         let tx_public_key = RistrettoPublic::try_from(&tx_out.public_key).unwrap();
         let shared_secret = get_tx_out_shared_secret(receiver.view_private_key(), &tx_public_key);
-        let (value, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
-        assert_eq!(value, expected_value);
+        let (amount_data, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
+        assert_eq!(amount_data.value, expected_value);
+        assert_eq!(amount_data.token_id, 0);
     }
 
     #[test_with_logger]
@@ -4758,12 +4764,13 @@ mod test {
                         let shared_secret =
                             get_tx_out_shared_secret(sender.view_private_key(), &tx_public_key);
 
-                        let (change_value, _blinding) = tx_out
+                        let (amount_data, _blinding) = tx_out
                             .amount
                             .get_value(&shared_secret)
                             .expect("Malformed amount");
 
-                        assert_eq!(total_value - test_amount - fee, change_value);
+                        assert_eq!(total_value - test_amount - fee, amount_data.value);
+                        assert_eq!(amount_data.token_id, 0);
                     }
                 }
                 Err(Error::SubaddressSPKNotFound) => continue,
@@ -4887,7 +4894,7 @@ mod test {
         let account_key = AccountKey::from(&root_id);
 
         let mut transaction_builder =
-            TransactionBuilder::new(MockFogResolver::default(), NoMemoBuilder::default());
+            TransactionBuilder::new(0, MockFogResolver::default(), NoMemoBuilder::default());
         let (tx_out, _tx_confirmation) = transaction_builder
             .add_output(
                 10,
@@ -4995,7 +5002,7 @@ mod test {
         let account_key = AccountKey::from(key);
 
         let mut transaction_builder =
-            TransactionBuilder::new(MockFogResolver::default(), NoMemoBuilder::default());
+            TransactionBuilder::new(0, MockFogResolver::default(), NoMemoBuilder::default());
         let (tx_out, _tx_confirmation) = transaction_builder
             .add_output(
                 10,

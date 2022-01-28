@@ -52,15 +52,15 @@ pub fn create_transaction<L: Ledger, R: RngCore + CryptoRng>(
     // Get the output value.
     let tx_out_public_key = RistrettoPublic::try_from(&tx_out.public_key).unwrap();
     let shared_secret = get_tx_out_shared_secret(sender.view_private_key(), &tx_out_public_key);
-    let (value, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
+    let (amount_data, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
 
-    assert!(value >= Mob::MINIMUM_FEE);
+    assert!(amount_data.value >= Mob::MINIMUM_FEE);
     create_transaction_with_amount(
         ledger,
         tx_out,
         sender,
         recipient,
-        value - Mob::MINIMUM_FEE,
+        amount_data.value - Mob::MINIMUM_FEE,
         Mob::MINIMUM_FEE,
         tombstone_block,
         rng,
@@ -88,7 +88,7 @@ pub fn create_transaction_with_amount<L: Ledger, R: RngCore + CryptoRng>(
     rng: &mut R,
 ) -> Tx {
     let mut transaction_builder =
-        TransactionBuilder::new(MockFogResolver::default(), EmptyMemoBuilder::default());
+        TransactionBuilder::new(0, MockFogResolver::default(), EmptyMemoBuilder::default());
 
     // The first transaction in the origin block should contain enough outputs to
     // use as mixins.
@@ -206,6 +206,7 @@ pub fn initialize_ledger<L: Ledger, R: RngCore + CryptoRng>(
                     .map(|_i| {
                         let mut tx_out = TxOut::new(
                             value,
+                            0,
                             &account_key.default_subaddress(),
                             &RistrettoPrivate::from_random(rng),
                             Default::default(),
@@ -298,6 +299,7 @@ pub fn get_outputs<T: RngCore + CryptoRng>(
         .map(|(recipient, value)| {
             TxOut::new(
                 *value,
+                0,
                 recipient,
                 &RistrettoPrivate::from_random(rng),
                 Default::default(),

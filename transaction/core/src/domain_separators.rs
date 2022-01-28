@@ -17,6 +17,9 @@
 /// Domain separator for Amount's value mask hash function.
 pub const AMOUNT_VALUE_DOMAIN_TAG: &str = "mc_amount_value";
 
+/// Domain separator for Amount's token_id mask hash function.
+pub const AMOUNT_TOKEN_ID_DOMAIN_TAG: &str = "mc_amount_token_id";
+
 /// Domain separator for Amount's blinding mask hash function.
 pub const AMOUNT_BLINDING_DOMAIN_TAG: &str = "mc_amount_blinding";
 

@@ -727,6 +727,8 @@ mod ledger_db_test {
     use tempdir::TempDir;
     use test::Bencher;
 
+    const MOB_ID: u32 = 0;
+
     /// Creates a LedgerDB instance.
     fn create_db() -> LedgerDB {
         let temp_dir = TempDir::new("test").unwrap();
@@ -762,6 +764,7 @@ mod ledger_db_test {
                 .map(|_i| {
                     let mut result = TxOut::new(
                         initial_amount,
+                        MOB_ID,
                         &account_key.default_subaddress(),
                         &RistrettoPrivate::from_random(&mut rng),
                         Default::default(),
@@ -820,6 +823,7 @@ mod ledger_db_test {
 
         let mut output = TxOut::new(
             1000,
+            MOB_ID,
             &account_key.default_subaddress(),
             &RistrettoPrivate::from_random(&mut rng),
             Default::default(),
@@ -878,6 +882,7 @@ mod ledger_db_test {
             .map(|_i| {
                 TxOut::new(
                     1000,
+                    MOB_ID,
                     &recipient_account_key.default_subaddress(),
                     &RistrettoPrivate::from_random(&mut rng),
                     Default::default(),
@@ -959,6 +964,7 @@ mod ledger_db_test {
             .map(|_i| {
                 TxOut::new(
                     1000,
+                    MOB_ID,
                     &recipient_account_key.default_subaddress(),
                     &RistrettoPrivate::from_random(&mut rng),
                     Default::default(),
@@ -1121,6 +1127,7 @@ mod ledger_db_test {
 
         let tx_out = TxOut::new(
             10,
+            MOB_ID,
             &account_key.default_subaddress(),
             &RistrettoPrivate::from_random(&mut rng),
             Default::default(),
@@ -1166,6 +1173,7 @@ mod ledger_db_test {
 
         let tx_out = TxOut::new(
             10,
+            MOB_ID,
             &account_key.default_subaddress(),
             &RistrettoPrivate::from_random(&mut rng),
             Default::default(),
@@ -1279,6 +1287,7 @@ mod ledger_db_test {
                     .map(|_i| {
                         TxOut::new(
                             1000,
+                            MOB_ID,
                             &recipient_account_key.default_subaddress(),
                             &RistrettoPrivate::from_random(&mut rng),
                             Default::default(),
@@ -1323,6 +1332,7 @@ mod ledger_db_test {
                 .map(|_i| {
                     TxOut::new(
                         1000,
+                        MOB_ID,
                         &recipient_account_key.default_subaddress(),
                         &RistrettoPrivate::from_random(&mut rng),
                         Default::default(),
@@ -1378,6 +1388,7 @@ mod ledger_db_test {
 
         let tx_out = TxOut::new(
             100,
+            MOB_ID,
             &account_key.default_subaddress(),
             &RistrettoPrivate::from_random(&mut rng),
             Default::default(),
@@ -1435,6 +1446,7 @@ mod ledger_db_test {
         let block_one_contents = {
             let tx_out = TxOut::new(
                 10,
+                MOB_ID,
                 &account_key.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 Default::default(),
@@ -1459,6 +1471,7 @@ mod ledger_db_test {
         let block_two_contents = {
             let tx_out = TxOut::new(
                 33,
+                MOB_ID,
                 &account_key.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 Default::default(),
@@ -1503,6 +1516,7 @@ mod ledger_db_test {
         let block_one_contents = {
             let mut tx_out = TxOut::new(
                 33,
+                MOB_ID,
                 &account_key.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 Default::default(),
@@ -1564,6 +1578,7 @@ mod ledger_db_test {
         {
             let tx_out = TxOut::new(
                 100,
+                MOB_ID,
                 &account_key.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 Default::default(),

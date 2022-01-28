@@ -163,9 +163,13 @@ fn main() {
         );
         let e_fog_hint = fog_hint.encrypt(&fog_pubkey, &mut rng);
 
+        // Assume MOB token for these tests
+        let token_id = 0;
+
         let tx_private_key = RistrettoPrivate::from_random(&mut rng);
         let tx_out = TxOut::new(
             credit.amount,
+            token_id,
             &account_keys[credit.account].default_subaddress(),
             &tx_private_key,
             e_fog_hint,

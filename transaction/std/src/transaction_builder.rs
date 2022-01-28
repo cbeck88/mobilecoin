@@ -41,6 +41,8 @@ pub struct TransactionBuilder<FPR: FogPubkeyResolver> {
     tombstone_block: u64,
     /// The fee paid in connection to this transaction
     fee: u64,
+    /// The token id for this transaction
+    token_id: u32,
     /// The source of validated fog pubkeys used for this transaction
     fog_resolver: FPR,
     /// The limit on the tombstone block value imposed pubkey_expiry values in
@@ -65,10 +67,11 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
     /// * `memo_builder` - An object which creates memos for the TxOuts in this
     ///   transaction
     pub fn new<MB: MemoBuilder + 'static + Send + Sync>(
+        token_id: u32,
         fog_resolver: FPR,
         memo_builder: MB,
     ) -> Self {
-        TransactionBuilder::new_with_box(fog_resolver, Box::new(memo_builder))
+        TransactionBuilder::new_with_box(token_id, fog_resolver, Box::new(memo_builder))
     }
 
     /// Initializes a new TransactionBuilder, using a Box<dyn MemoBuilder>
@@ -80,6 +83,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
     /// * `memo_builder` - An object which creates memos for the TxOuts in this
     ///   transaction
     pub fn new_with_box(
+        token_id: u32,
         fog_resolver: FPR,
         memo_builder: Box<dyn MemoBuilder + Send + Sync>,
     ) -> Self {
@@ -88,6 +92,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
             outputs_and_shared_secrets: Vec::new(),
             tombstone_block: u64::max_value(),
             fee: Mob::MINIMUM_FEE,
+            token_id,
             fog_resolver,
             fog_tombstone_block_limit: u64::max_value(),
             memo_builder: Some(memo_builder),
@@ -218,7 +223,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
     ) -> Result<(TxOut, TxOutConfirmationNumber), TxBuilderError> {
         let (hint, pubkey_expiry) = create_fog_hint(fog_hint_address, &self.fog_resolver, rng)?;
         let (tx_out, shared_secret) =
-            create_output_with_fog_hint(value, recipient, hint, memo_fn, rng)?;
+            create_output_with_fog_hint(value, self.token_id, recipient, hint, memo_fn, rng)?;
 
         self.impose_tombstone_block_limit(pubkey_expiry);
 
@@ -307,17 +312,23 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
             .iter()
             .map(|(tx_out, shared_secret)| {
                 let amount = &tx_out.amount;
-                let (value, blinding) = amount
+                let (amount_data, blinding) = amount
                     .get_value(shared_secret)
                     .expect("TransactionBuilder created an invalid Amount");
-                (value, blinding)
+                (amount_data.value, blinding)
             })
             .collect();
 
         let (outputs, _shared_serets): (Vec<TxOut>, Vec<_>) =
             self.outputs_and_shared_secrets.into_iter().unzip();
 
-        let tx_prefix = TxPrefix::new(inputs, outputs, self.fee, self.tombstone_block);
+        let tx_prefix = TxPrefix::new(
+            inputs,
+            outputs,
+            self.fee,
+            self.token_id,
+            self.tombstone_block,
+        );
 
         let mut rings: Vec<Vec<(CompressedRistrettoPublic, CompressedCommitment)>> = Vec::new();
         for input in &tx_prefix.inputs {
@@ -344,8 +355,14 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
                 &input_credential.real_output_public_key,
                 &input_credential.view_private_key,
             );
-            let (value, blinding) = amount.get_value(&shared_secret)?;
-            input_secrets.push((onetime_private_key, value, blinding));
+            let (amount_data, blinding) = amount.get_value(&shared_secret)?;
+            if amount_data.token_id != self.token_id {
+                return Err(TxBuilderError::WrongTokenType(
+                    self.token_id,
+                    amount_data.token_id,
+                ));
+            }
+            input_secrets.push((onetime_private_key, amount_data.value, blinding));
         }
 
         let message = tx_prefix.hash().0;
@@ -356,6 +373,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
             &input_secrets,
             &output_values_and_blindings,
             self.fee,
+            self.token_id,
             rng,
         )?;
 
@@ -377,13 +395,14 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
 /// * `rng` -
 fn create_output_with_fog_hint<RNG: CryptoRng + RngCore>(
     value: u64,
+    token_id: u32,
     recipient: &PublicAddress,
     fog_hint: EncryptedFogHint,
     memo_fn: impl FnOnce(MemoContext) -> Result<Option<MemoPayload>, NewMemoError>,
     rng: &mut RNG,
 ) -> Result<(TxOut, RistrettoPublic), TxBuilderError> {
     let private_key = RistrettoPrivate::from_random(rng);
-    let tx_out = TxOut::new_with_memo(value, recipient, &private_key, fog_hint, memo_fn)?;
+    let tx_out = TxOut::new_with_memo(value, token_id, recipient, &private_key, fog_hint, memo_fn)?;
     let shared_secret = create_shared_secret(recipient.view_public_key(), &private_key);
     Ok((tx_out, shared_secret))
 }
@@ -457,8 +476,10 @@ pub mod transaction_builder_tests {
         rng: &mut RNG,
     ) -> Result<(TxOut, RistrettoPublic), TxBuilderError> {
         let (hint, _pubkey_expiry) = create_fog_hint(recipient, fog_resolver, rng)?;
+        let token_id = 0;
         create_output_with_fog_hint(
             value,
+            token_id,
             recipient,
             hint,
             |_| Ok(Some(MemoPayload::default())),
@@ -552,8 +573,9 @@ pub mod transaction_builder_tests {
         fog_resolver: FPR,
         rng: &mut RNG,
     ) -> Result<Tx, TxBuilderError> {
+        let token_id = 0;
         let mut transaction_builder =
-            TransactionBuilder::new(fog_resolver.clone(), EmptyMemoBuilder::default());
+            TransactionBuilder::new(token_id, fog_resolver.clone(), EmptyMemoBuilder::default());
         let input_value = 1000;
         let output_value = 10;
 
@@ -592,7 +614,9 @@ pub mod transaction_builder_tests {
         let membership_proofs = input_credentials.membership_proofs.clone();
         let key_image = KeyImage::from(&input_credentials.onetime_private_key);
 
-        let mut transaction_builder = TransactionBuilder::new(fpr, EmptyMemoBuilder::default());
+        let token_id = 0;
+        let mut transaction_builder =
+            TransactionBuilder::new(token_id, fpr, EmptyMemoBuilder::default());
 
         transaction_builder.add_input(input_credentials);
         let (_txout, confirmation) = transaction_builder
@@ -659,8 +683,9 @@ pub mod transaction_builder_tests {
         let membership_proofs = input_credentials.membership_proofs.clone();
         let key_image = KeyImage::from(&input_credentials.onetime_private_key);
 
+        let token_id = 0;
         let mut transaction_builder =
-            TransactionBuilder::new(fog_resolver, EmptyMemoBuilder::default());
+            TransactionBuilder::new(token_id, fog_resolver, EmptyMemoBuilder::default());
 
         transaction_builder.add_input(input_credentials);
         let (_txout, confirmation) = transaction_builder
@@ -735,8 +760,9 @@ pub mod transaction_builder_tests {
                 },
         });
 
+        let token_id = 0;
         let mut transaction_builder =
-            TransactionBuilder::new(fog_resolver.clone(), EmptyMemoBuilder::default());
+            TransactionBuilder::new(token_id, fog_resolver.clone(), EmptyMemoBuilder::default());
 
         let input_credentials = get_input_credentials(&sender, value, &fog_resolver, &mut rng);
         transaction_builder.add_input(input_credentials);
@@ -799,8 +825,12 @@ pub mod transaction_builder_tests {
         });
 
         {
-            let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), EmptyMemoBuilder::default());
+            let token_id = 0;
+            let mut transaction_builder = TransactionBuilder::new(
+                token_id,
+                fog_resolver.clone(),
+                EmptyMemoBuilder::default(),
+            );
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -822,8 +852,12 @@ pub mod transaction_builder_tests {
         }
 
         {
-            let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), EmptyMemoBuilder::default());
+            let token_id = 0;
+            let mut transaction_builder = TransactionBuilder::new(
+                token_id,
+                fog_resolver.clone(),
+                EmptyMemoBuilder::default(),
+            );
 
             transaction_builder.set_tombstone_block(500);
 
@@ -855,6 +889,7 @@ pub mod transaction_builder_tests {
         let recipient = AccountKey::random_with_fog(&mut rng);
         let recipient_address = recipient.default_subaddress();
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
+        let token_id = 0;
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
 
@@ -871,8 +906,11 @@ pub mod transaction_builder_tests {
         });
 
         {
-            let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), EmptyMemoBuilder::default());
+            let mut transaction_builder = TransactionBuilder::new(
+                token_id,
+                fog_resolver.clone(),
+                EmptyMemoBuilder::default(),
+            );
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -935,8 +973,9 @@ pub mod transaction_builder_tests {
                     recipient.view_private_key(),
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, value - change_value - Mob::MINIMUM_FEE);
+                let (amount_data, _) = output.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
                 assert_eq!(memo, MemoPayload::default());
@@ -963,8 +1002,9 @@ pub mod transaction_builder_tests {
                     sender.view_private_key(),
                     &RistrettoPublic::try_from(&change.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = change.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, change_value);
+                let (amount_data, _) = change.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, change_value);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = change.e_memo.clone().unwrap().decrypt(&ss);
                 assert_eq!(memo, MemoPayload::default());
@@ -999,6 +1039,7 @@ pub mod transaction_builder_tests {
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
+        let token_id = 0;
 
         let fog_resolver = MockFogResolver(btreemap! {
                             recipient_address
@@ -1019,7 +1060,7 @@ pub mod transaction_builder_tests {
             memo_builder.enable_destination_memo();
 
             let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), memo_builder);
+                TransactionBuilder::new(token_id, fog_resolver.clone(), memo_builder);
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -1082,8 +1123,9 @@ pub mod transaction_builder_tests {
                     recipient.view_private_key(),
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, value - change_value - Mob::MINIMUM_FEE);
+                let (amount_data, _) = output.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1115,8 +1157,9 @@ pub mod transaction_builder_tests {
                     sender.view_private_key(),
                     &RistrettoPublic::try_from(&change.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = change.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, change_value);
+                let (amount_data, _) = change.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, change_value);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = change.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1148,7 +1191,7 @@ pub mod transaction_builder_tests {
             memo_builder.enable_destination_memo();
 
             let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), memo_builder);
+                TransactionBuilder::new(token_id, fog_resolver.clone(), memo_builder);
 
             transaction_builder.set_tombstone_block(2000);
             transaction_builder.set_fee(Mob::MINIMUM_FEE * 4).unwrap();
@@ -1212,8 +1255,9 @@ pub mod transaction_builder_tests {
                     recipient.view_private_key(),
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, value - change_value - Mob::MINIMUM_FEE * 4);
+                let (amount_data, _) = output.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE * 4);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1245,8 +1289,9 @@ pub mod transaction_builder_tests {
                     sender.view_private_key(),
                     &RistrettoPublic::try_from(&change.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = change.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, change_value);
+                let (amount_data, _) = change.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, change_value);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = change.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1279,7 +1324,7 @@ pub mod transaction_builder_tests {
             memo_builder.set_payment_request_id(42);
 
             let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), memo_builder);
+                TransactionBuilder::new(token_id, fog_resolver.clone(), memo_builder);
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -1342,8 +1387,9 @@ pub mod transaction_builder_tests {
                     recipient.view_private_key(),
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, value - change_value - Mob::MINIMUM_FEE);
+                let (amount_data, _) = output.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1376,8 +1422,9 @@ pub mod transaction_builder_tests {
                     sender.view_private_key(),
                     &RistrettoPublic::try_from(&change.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = change.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, change_value);
+                let (amount_data, _) = change.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, change_value);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = change.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1409,7 +1456,7 @@ pub mod transaction_builder_tests {
             memo_builder.set_payment_request_id(47);
 
             let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), memo_builder);
+                TransactionBuilder::new(token_id, fog_resolver.clone(), memo_builder);
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -1472,8 +1519,9 @@ pub mod transaction_builder_tests {
                     recipient.view_private_key(),
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, value - change_value - Mob::MINIMUM_FEE);
+                let (amount_data, _) = output.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1506,8 +1554,9 @@ pub mod transaction_builder_tests {
                     sender.view_private_key(),
                     &RistrettoPublic::try_from(&change.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = change.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, change_value);
+                let (amount_data, _) = change.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, change_value);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = change.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1527,7 +1576,7 @@ pub mod transaction_builder_tests {
             memo_builder.set_payment_request_id(47);
 
             let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), memo_builder);
+                TransactionBuilder::new(token_id, fog_resolver.clone(), memo_builder);
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -1590,8 +1639,9 @@ pub mod transaction_builder_tests {
                     recipient.view_private_key(),
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, value - change_value - Mob::MINIMUM_FEE);
+                let (amount_data, _) = output.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1609,8 +1659,9 @@ pub mod transaction_builder_tests {
                     sender.view_private_key(),
                     &RistrettoPublic::try_from(&change.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = change.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, change_value);
+                let (amount_data, _) = change.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, change_value);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = change.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1649,6 +1700,7 @@ pub mod transaction_builder_tests {
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
+        let token_id = 0;
 
         let fog_resolver = MockFogResolver(btreemap! {
                             bob_address
@@ -1670,7 +1722,7 @@ pub mod transaction_builder_tests {
             memo_builder.enable_destination_memo();
 
             let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), memo_builder);
+                TransactionBuilder::new(token_id, fog_resolver.clone(), memo_builder);
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -1733,8 +1785,9 @@ pub mod transaction_builder_tests {
                     bob.view_private_key(),
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, value - change_value - Mob::MINIMUM_FEE);
+                let (amount_data, _) = output.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1766,8 +1819,9 @@ pub mod transaction_builder_tests {
                     alice.view_private_key(),
                     &RistrettoPublic::try_from(&change.public_key).unwrap(),
                 );
-                let (tx_out_value, _) = change.amount.get_value(&ss).unwrap();
-                assert_eq!(tx_out_value, change_value);
+                let (amount_data, _) = change.amount.get_value(&ss).unwrap();
+                assert_eq!(amount_data.value, change_value);
+                assert_eq!(amount_data.token_id, token_id);
 
                 let memo = change.e_memo.clone().unwrap().decrypt(&ss);
                 match MemoType::try_from(&memo).expect("Couldn't decrypt memo") {
@@ -1805,6 +1859,7 @@ pub mod transaction_builder_tests {
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
+        let token_id = 0;
 
         let fog_resolver = MockFogResolver(btreemap! {
                             recipient_address
@@ -1825,7 +1880,7 @@ pub mod transaction_builder_tests {
             memo_builder.enable_destination_memo();
 
             let mut transaction_builder =
-                TransactionBuilder::new(fog_resolver.clone(), memo_builder);
+                TransactionBuilder::new(token_id, fog_resolver.clone(), memo_builder);
 
             transaction_builder.set_tombstone_block(2000);
 
@@ -1884,6 +1939,7 @@ pub mod transaction_builder_tests {
         let alice = AccountKey::random(&mut rng);
         let bob = AccountKey::random(&mut rng);
         let value = 1475;
+        let token_id = 0;
 
         // Mint an initial collection of outputs, including one belonging to Alice.
         let (ring, real_index) = get_ring(3, &alice, value, &fpr, &mut rng);
@@ -1913,7 +1969,8 @@ pub mod transaction_builder_tests {
         )
         .unwrap();
 
-        let mut transaction_builder = TransactionBuilder::new(fpr, EmptyMemoBuilder::default());
+        let mut transaction_builder =
+            TransactionBuilder::new(token_id, fpr, EmptyMemoBuilder::default());
         transaction_builder.add_input(input_credentials);
 
         let wrong_value = 999;

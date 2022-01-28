@@ -24,6 +24,9 @@ pub enum TxBuilderError {
     /// Bad Amount: {0}
     BadAmount(AmountError),
 
+    /// Input had wrong token id: Expected {0}, Found {1}
+    WrongTokenType(u32, u32),
+
     /// New Tx: {0}
     NewTx(NewTxError),
 

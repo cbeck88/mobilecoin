@@ -763,8 +763,12 @@ impl<T: BlockchainConnection + UserTxConnection + 'static, FPR: FogPubkeyResolve
             fog_resolver_factory(&fog_uris).map_err(Error::Fog)?
         };
 
+        // FIXME: Should take a token id as a parameter and not assume mob
+        let token_id = 0;
+
         // Create tx_builder.
-        let mut tx_builder = TransactionBuilder::new(fog_resolver, NoMemoBuilder::default());
+        let mut tx_builder =
+            TransactionBuilder::new(token_id, fog_resolver, NoMemoBuilder::default());
 
         tx_builder
             .set_fee(fee)
@@ -961,6 +965,7 @@ mod test {
 
         let tx_out = TxOut::new(
             1,
+            0,
             &alice.default_subaddress(),
             &tx_secret_key_for_txo,
             Default::default(),

@@ -190,24 +190,26 @@ fn main() {
 
             let public_key = RistrettoPublic::try_from(&tx_out.public_key).unwrap();
             let shared_secret = get_tx_out_shared_secret(account.view_private_key(), &public_key);
-            let (input_amount, _blinding_factor) = tx_out
+            let (amount_data, _blinding_factor) = tx_out
                 .amount
                 .get_value(&shared_secret)
                 .expect("Malformed amount");
+
+            let value = amount_data.value;
 
             log::trace!(
                 logger,
                 "(account = {:?}) and (tx_index {:?}) = {}",
                 account_index,
                 index,
-                input_amount,
+                value,
             );
 
             // Push to queue
             spendable_txouts_sender
                 .send(SpendableTxOut {
                     tx_out: tx_out.clone(),
-                    amount: input_amount,
+                    amount: value,
                     from_account_key: account.clone(),
                 })
                 .expect("failed sending to spendable_txouts_sender");
@@ -322,22 +324,19 @@ fn main() {
                     let public_key = RistrettoPublic::try_from(&tx_out.public_key).unwrap();
                     let shared_secret =
                         get_tx_out_shared_secret(account.view_private_key(), &public_key);
-                    let (input_amount, _blinding_factor) = tx_out
+                    let (amount_data, _blinding_factor) = tx_out
                         .amount
                         .get_value(&shared_secret)
                         .expect("Malformed amount");
-                    log::trace!(
-                        logger,
-                        "amount of {} is {}",
-                        tx_out.public_key,
-                        input_amount
-                    );
+
+                    let value = amount_data.value;
+                    log::trace!(logger, "amount of {} is {}", tx_out.public_key, value);
 
                     // Push to queue
                     spendable_txouts_sender
                         .send(SpendableTxOut {
                             tx_out: tx_out.clone(),
-                            amount: input_amount,
+                            amount: value,
                             from_account_key: account.clone(),
                         })
                         .expect("failed sending to spendable_txouts_sender");
@@ -491,8 +490,12 @@ fn build_tx(
     // Sanity
     assert_eq!(utxos_with_proofs.len(), rings.len());
 
+    // Assume MOB token
+    let token_id = 0;
+
     // Create tx_builder. No fog reports.
-    let mut tx_builder = TransactionBuilder::new(FogResolver::default(), NoMemoBuilder::default());
+    let mut tx_builder =
+        TransactionBuilder::new(token_id, FogResolver::default(), NoMemoBuilder::default());
 
     tx_builder
         .set_fee(FEE.load(Ordering::SeqCst))

@@ -1,5 +1,7 @@
 // Copyright (c) 2018-2021 The MobileCoin Foundation
 
+//! A new-type wrapper for representing TokenIds
+
 use core::{fmt, hash::Hash, ops::Deref};
 use mc_crypto_digestible::Digestible;
 use serde::{Deserialize, Serialize};
@@ -23,6 +25,7 @@ impl fmt::Display for TokenId {
 }
 
 impl TokenId {
+    /// Represents the MobileCoin token id for MOB token
     pub const MOB: Self = Self(0);
 }
 
@@ -43,6 +46,7 @@ pub trait Token {
     const MINIMUM_FEE: u64;
 }
 
+/// Exports structures which expose constants related to tokens.
 pub mod tokens {
     use super::*;
     use crate::constants::MICROMOB_TO_PICOMOB;

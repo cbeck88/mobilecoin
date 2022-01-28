@@ -217,6 +217,7 @@ pub fn get_test_ledger_blocks(n_blocks: usize) -> Vec<(Block, BlockContents)> {
             // Create the origin block.
             let mut tx_out = TxOut::new(
                 value,
+                0,
                 &account_key.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 Default::default(),
@@ -234,6 +235,7 @@ pub fn get_test_ledger_blocks(n_blocks: usize) -> Vec<(Block, BlockContents)> {
             // Create a normal block.
             let tx_out = TxOut::new(
                 16,
+                0,
                 &account_key.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 Default::default(),

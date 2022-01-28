@@ -1283,6 +1283,7 @@ dependencies = [
  "aes",
  "blake2",
  "bulletproofs-og",
+ "crc",
  "curve25519-dalek",
  "displaydoc",
  "generic-array",

@@ -1,5 +1,7 @@
 // Copyright (c) 2018-2021 The MobileCoin Foundation
 
+//! Definition of a MobileCoin transaction and a MobileCoin TxOut
+
 use alloc::vec::Vec;
 use blake2::digest::Update;
 use core::{convert::TryFrom, fmt};
@@ -15,7 +17,7 @@ use prost::Message;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    amount::{Amount, AmountError},
+    amount::{Amount, AmountData, AmountError},
     domain_separators::TXOUT_CONFIRMATION_NUMBER_DOMAIN_TAG,
     encrypted_fog_hint::EncryptedFogHint,
     get_tx_out_shared_secret,
@@ -156,11 +158,15 @@ pub struct TxPrefix {
     pub outputs: Vec<TxOut>,
 
     /// Fee paid to the foundation for this transaction
-    #[prost(uint64, tag = "3")]
+    #[prost(fixed64, tag = "3")]
     pub fee: u64,
 
+    /// Token id for this transaction
+    #[prost(fixed32, tag = "4")]
+    pub token_id: u32,
+
     /// The block index at which this transaction is no longer valid.
-    #[prost(uint64, tag = "4")]
+    #[prost(uint64, tag = "5")]
     pub tombstone_block: u64,
 }
 
@@ -173,11 +179,18 @@ impl TxPrefix {
     /// * `fee` - Transaction fee.
     /// * `tombstone_block` - The block index at which this transaction is no
     ///   longer valid.
-    pub fn new(inputs: Vec<TxIn>, outputs: Vec<TxOut>, fee: u64, tombstone_block: u64) -> TxPrefix {
+    pub fn new(
+        inputs: Vec<TxIn>,
+        outputs: Vec<TxOut>,
+        fee: u64,
+        token_id: u32,
+        tombstone_block: u64,
+    ) -> TxPrefix {
         TxPrefix {
             inputs,
             outputs,
             fee,
+            token_id,
             tombstone_block,
         }
     }
@@ -284,11 +297,12 @@ impl TxOut {
     /// * `hint` - Encrypted Fog hint for this output.
     pub fn new(
         value: u64,
+        token_id: u32,
         recipient: &PublicAddress,
         tx_private_key: &RistrettoPrivate,
         hint: EncryptedFogHint,
     ) -> Result<Self, AmountError> {
-        TxOut::new_with_memo(value, recipient, tx_private_key, hint, |_| {
+        TxOut::new_with_memo(value, token_id, recipient, tx_private_key, hint, |_| {
             Ok(Some(MemoPayload::default()))
         })
         .map_err(|err| match err {
@@ -311,6 +325,7 @@ impl TxOut {
     ///   MemoPayload, or a NewMemo error
     pub fn new_with_memo(
         value: u64,
+        token_id: u32,
         recipient: &PublicAddress,
         tx_private_key: &RistrettoPrivate,
         hint: EncryptedFogHint,
@@ -321,7 +336,8 @@ impl TxOut {
 
         let shared_secret = create_shared_secret(recipient.view_public_key(), tx_private_key);
 
-        let amount = Amount::new(value, &shared_secret)?;
+        let amount_data = AmountData { value, token_id };
+        let amount = Amount::new(amount_data, &shared_secret)?;
 
         let memo_ctxt = MemoContext {
             tx_public_key: &public_key,
@@ -425,6 +441,7 @@ pub struct TxOutMembershipElement {
 }
 
 impl TxOutMembershipElement {
+    /// Create a new membership element
     pub fn new(range: Range, hash: [u8; 32]) -> Self {
         Self {
             range,
@@ -493,6 +510,7 @@ impl TxOutConfirmationNumber {
         self.0.to_vec()
     }
 
+    /// Validate a confirmation number against tx pubkey and view private key
     pub fn validate(
         &self,
         tx_pubkey: &RistrettoPublic,
@@ -559,7 +577,7 @@ mod tests {
         subaddress_matches_tx_out,
         tokens::Mob,
         tx::{Tx, TxIn, TxOut, TxPrefix},
-        Amount, Token,
+        Amount, AmountData, Token,
     };
     use alloc::vec::Vec;
     use mc_account_keys::{AccountKey, CHANGE_SUBADDRESS_INDEX, DEFAULT_SUBADDRESS_INDEX};
@@ -577,7 +595,11 @@ mod tests {
             let shared_secret = RistrettoPublic::from_random(&mut rng);
             let target_key = RistrettoPublic::from_random(&mut rng).into();
             let public_key = RistrettoPublic::from_random(&mut rng).into();
-            let amount = Amount::new(23u64, &shared_secret).unwrap();
+            let amount_data = AmountData {
+                value: 23u64,
+                token_id: 0,
+            };
+            let amount = Amount::new(amount_data, &shared_secret).unwrap();
             TxOut {
                 amount,
                 target_key,
@@ -606,6 +628,7 @@ mod tests {
             inputs: vec![tx_in],
             outputs: vec![tx_out],
             fee: Mob::MINIMUM_FEE,
+            token_id: *Mob::ID,
             tombstone_block: 23,
         };
 
@@ -635,7 +658,11 @@ mod tests {
             let shared_secret = RistrettoPublic::from_random(&mut rng);
             let target_key = RistrettoPublic::from_random(&mut rng).into();
             let public_key = RistrettoPublic::from_random(&mut rng).into();
-            let amount = Amount::new(23u64, &shared_secret).unwrap();
+            let amount_data = AmountData {
+                value: 23u64,
+                token_id: 0,
+            };
+            let amount = Amount::new(amount_data, &shared_secret).unwrap();
             TxOut {
                 amount,
                 target_key,
@@ -664,6 +691,7 @@ mod tests {
             inputs: vec![tx_in],
             outputs: vec![tx_out],
             fee: Mob::MINIMUM_FEE,
+            token_id: *Mob::ID,
             tombstone_block: 23,
         };
 
@@ -701,7 +729,7 @@ mod tests {
 
             // A tx out with an empty memo
             let mut tx_out =
-                TxOut::new(13u64, &bob_addr, &tx_private_key, Default::default()).unwrap();
+                TxOut::new(13u64, 0, &bob_addr, &tx_private_key, Default::default()).unwrap();
             assert!(
                 tx_out.e_memo.is_some(),
                 "All TxOut (except preexisting) should have a memo"
@@ -736,6 +764,7 @@ mod tests {
             // A tx out with a memo
             let tx_out = TxOut::new_with_memo(
                 13u64,
+                0,
                 &bob_addr,
                 &tx_private_key,
                 Default::default(),
@@ -769,6 +798,7 @@ mod tests {
             // A tx out with a memo
             let tx_out = TxOut::new_with_memo(
                 13u64,
+                0,
                 &bob.change_subaddress(),
                 &tx_private_key,
                 Default::default(),

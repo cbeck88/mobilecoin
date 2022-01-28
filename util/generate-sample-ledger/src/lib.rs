@@ -136,7 +136,7 @@ fn create_output(
         EncryptedFogHint::fake_onetime_hint(rng)
     };
 
-    let mut output = TxOut::new(value, recipient, &tx_private_key, hint).unwrap();
+    let mut output = TxOut::new(value, 0, recipient, &tx_private_key, hint).unwrap();
     // At this point, we clear the e_memo field, because, historically the genesis
     // block did not have memo fields, even though they are expected now.
     output.e_memo = None;

@@ -730,6 +730,7 @@ fn add_block_to_ledger_db(
             TxOut::new(
                 // TODO: allow for subaddress index!
                 value,
+                0,
                 recipient,
                 &RistrettoPrivate::from_random(rng),
                 Default::default(),

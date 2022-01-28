@@ -21,6 +21,7 @@ fn test_origin_tx_outs() -> Vec<TxOut> {
         .map(|acct| {
             let mut tx_out = TxOut::new(
                 rng.next_u32() as u64,
+                0,
                 &acct.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 EncryptedFogHint::fake_onetime_hint(&mut rng),

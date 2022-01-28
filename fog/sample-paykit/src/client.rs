@@ -574,16 +574,18 @@ fn build_transaction_helper<T: RngCore + CryptoRng, FPR: FogPubkeyResolver>(
         return Err(Error::RingsForInput(rings.len(), inputs.len()));
     }
 
+    // FIXME: This should take a token id as an argument, and not assume MOB
+    let token_id = 0;
     // Use the RTHMemoBuilder if memos are enabled, NoMemoBuilder otherwise
     let mut tx_builder = if use_rth_memos {
         let mut memo_builder = RTHMemoBuilder::default();
         memo_builder.set_sender_credential(SenderMemoCredential::from(source_account_key));
         memo_builder.enable_destination_memo();
 
-        TransactionBuilder::new(fog_resolver, memo_builder)
+        TransactionBuilder::new(token_id, fog_resolver, memo_builder)
     } else {
         let memo_builder = NoMemoBuilder::default();
-        TransactionBuilder::new(fog_resolver, memo_builder)
+        TransactionBuilder::new(token_id, fog_resolver, memo_builder)
     };
     tx_builder.set_fee(fee)?;
 
