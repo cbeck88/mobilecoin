@@ -59,7 +59,7 @@ use mc_transaction_core::{
     ring_signature::{KeyImage, Scalar},
     tx::{Tx, TxOut, TxOutMembershipProof},
     validation::TransactionValidationError,
-    Amount, AmountData, Block, BlockContents, BlockSignature, MemoPayload, BLOCK_VERSION,
+    AmountData, Block, BlockContents, BlockSignature, MaskedAmount, MemoPayload, BLOCK_VERSION,
 };
 use prost::Message;
 use rand_core::{CryptoRng, RngCore};
@@ -632,7 +632,7 @@ fn mint_aggregate_fee(
             value: total_fee,
             token_id,
         };
-        let amount = Amount::new(amount_data, &shared_secret)
+        let amount = MaskedAmount::new(amount_data, &shared_secret)
             .map_err(|e| Error::FormBlock(format!("AmountError: {:?}", e)))?;
 
         let e_memo = Some(MemoPayload::default().encrypt(&shared_secret));

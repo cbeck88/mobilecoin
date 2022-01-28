@@ -173,7 +173,9 @@ mod test {
     use super::*;
     use mc_crypto_keys::RistrettoPublic;
     use mc_ledger_db::Ledger;
-    use mc_transaction_core::{encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, Amount, AmountData};
+    use mc_transaction_core::{
+        encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, AmountData, MaskedAmount,
+    };
     use mc_transaction_core_test_utils::{
         create_ledger, create_transaction, initialize_ledger, AccountKey,
     };
@@ -191,7 +193,8 @@ mod test {
             token_id: 0,
         };
         let tx_out = TxOut {
-            amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),
+            amount: MaskedAmount::new(amount_data, &RistrettoPublic::from_random(&mut rng))
+                .unwrap(),
             target_key: RistrettoPublic::from_random(&mut rng).into(),
             public_key: RistrettoPublic::from_random(&mut rng).into(),
             e_fog_hint: (&[0u8; ENCRYPTED_FOG_HINT_LEN]).into(),
@@ -280,7 +283,8 @@ mod test {
                 token_id: 0,
             };
             let tx_out = TxOut {
-                amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),
+                amount: MaskedAmount::new(amount_data, &RistrettoPublic::from_random(&mut rng))
+                    .unwrap(),
                 target_key: RistrettoPublic::from_random(&mut rng).into(),
                 public_key: RistrettoPublic::from_random(&mut rng).into(),
                 e_fog_hint: (&[0u8; ENCRYPTED_FOG_HINT_LEN]).into(),

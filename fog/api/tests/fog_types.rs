@@ -12,7 +12,7 @@ use mc_transaction_core::{
     encrypted_fog_hint::EncryptedFogHint,
     membership_proofs::Range,
     tx::{TxOut, TxOutMembershipElement, TxOutMembershipHash, TxOutMembershipProof},
-    Amount, AmountData, EncryptedMemo,
+    AmountData, EncryptedMemo, MaskedAmount,
 };
 use mc_util_from_random::FromRandom;
 use mc_util_test_helper::{run_with_several_seeds, CryptoRng, RngCore};
@@ -377,7 +377,7 @@ fn test_stored_kex_rng_round_trip_protobuf() {
 /// They should not be shipped to production or to customers as part of
 /// libmobilecoin They are not done using the mc_crypto_keys::FromRandom trait
 /// because we don't need to ship them, and not all of these sampling
-/// distributions e.g. Amount::from_random really make sense for any other
+/// distributions e.g. MaskedAmount::from_random really make sense for any other
 /// use-case, we are just generating fuzz data basically.
 trait Sample {
     fn sample<T: RngCore + CryptoRng>(rng: &mut T) -> Self;
@@ -443,14 +443,14 @@ impl Sample for Amount {
             value: rng.next_u32() as u64,
             token_id: rng.next_u32(),
         };
-        Amount::new(amount_data, &RistrettoPublic::from_random(rng)).unwrap()
+        MaskedAmount::new(amount_data, &RistrettoPublic::from_random(rng)).unwrap()
     }
 }
 
 impl Sample for TxOut {
     fn sample<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
         TxOut {
-            amount: Amount::sample(rng),
+            amount: MaskedAmount::sample(rng),
             target_key: RistrettoPublic::from_random(rng).into(),
             public_key: RistrettoPublic::from_random(rng).into(),
             e_fog_hint: EncryptedFogHint::fake_onetime_hint(rng),

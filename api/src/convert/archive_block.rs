@@ -122,7 +122,7 @@ mod tests {
         membership_proofs::Range,
         ring_signature::KeyImage,
         tx::{TxOut, TxOutMembershipElement, TxOutMembershipHash},
-        Amount, AmountData, Block, BlockContents, BlockData, BlockID, BlockSignature,
+        AmountData, Block, BlockContents, BlockData, BlockID, BlockSignature, MaskedAmount,
     };
     use mc_util_from_random::FromRandom;
     use rand::{rngs::StdRng, SeedableRng};
@@ -138,7 +138,8 @@ mod tests {
                 token_id: 0,
             };
             let tx_out = TxOut {
-                amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),
+                amount: MaskedAmount::new(amount_data, &RistrettoPublic::from_random(&mut rng))
+                    .unwrap(),
                 target_key: RistrettoPublic::from_random(&mut rng).into(),
                 public_key: RistrettoPublic::from_random(&mut rng).into(),
                 e_fog_hint: (&[0u8; ENCRYPTED_FOG_HINT_LEN]).into(),

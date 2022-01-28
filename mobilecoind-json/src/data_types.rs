@@ -3,7 +3,7 @@
 //! Serializeable data types that wrap the mobilecoind API.
 
 use mc_api::external::{
-    Amount, CompressedRistretto, EncryptedFogHint, EncryptedMemo, KeyImage, PublicAddress,
+    CompressedRistretto, EncryptedFogHint, EncryptedMemo, KeyImage, MaskedAmount, PublicAddress,
     RingMLSAG, SignatureRctBulletproofs, Tx, TxIn, TxOutMembershipElement, TxOutMembershipHash,
     TxOutMembershipProof, TxPrefix,
 };
@@ -499,8 +499,8 @@ pub struct JsonAmount {
     pub masked_value: String,
 }
 
-impl From<&Amount> for JsonAmount {
-    fn from(src: &Amount) -> Self {
+impl From<&MaskedAmount> for JsonAmount {
+    fn from(src: &MaskedAmount) -> Self {
         Self {
             commitment: hex::encode(src.get_commitment().get_data()),
             masked_value: src.get_masked_value().to_string(),
@@ -539,7 +539,7 @@ impl TryFrom<&JsonTxOut> for mc_api::external::TxOut {
             hex::decode(&src.amount.commitment)
                 .map_err(|err| format!("Failed to decode commitment hex: {}", err))?,
         );
-        let mut amount = Amount::new();
+        let mut amount = MaskedAmount::new();
         amount.set_commitment(commitment);
         amount.set_masked_value(
             src.amount
@@ -1300,7 +1300,9 @@ mod test {
     use super::*;
     use mc_crypto_keys::RistrettoPublic;
     use mc_ledger_db::Ledger;
-    use mc_transaction_core::{encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, Amount, AmountData};
+    use mc_transaction_core::{
+        encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, AmountData, MaskedAmount,
+    };
     use mc_transaction_core_test_utils::{
         create_ledger, create_transaction, initialize_ledger, AccountKey,
     };
@@ -1339,7 +1341,8 @@ mod test {
                 token_id: 0,
             };
             let tx_out = mc_transaction_core::tx::TxOut {
-                amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),
+                amount: MaskedAmount::new(amount_data, &RistrettoPublic::from_random(&mut rng))
+                    .unwrap(),
                 target_key: RistrettoPublic::from_random(&mut rng).into(),
                 public_key: RistrettoPublic::from_random(&mut rng).into(),
                 e_fog_hint: (&[0u8; ENCRYPTED_FOG_HINT_LEN]).into(),

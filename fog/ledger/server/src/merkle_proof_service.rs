@@ -216,7 +216,7 @@ mod test {
         membership_proofs::Range,
         onetime_keys::{create_shared_secret, create_tx_out_public_key, create_tx_out_target_key},
         tx::{TxOut, TxOutMembershipElement, TxOutMembershipProof},
-        Amount, AmountData,
+        AmountData, MaskedAmount,
     };
     use mc_util_from_random::FromRandom;
     use mc_util_grpc::AnonymousAuthenticator;
@@ -248,7 +248,7 @@ mod test {
                 value: value + output_index as u64,
                 token_id: 0,
             };
-            let amount = Amount::new(amount_data, &shared_secret).unwrap();
+            let amount = MaskedAmount::new(amount_data, &shared_secret).unwrap();
             let tx_out = TxOut {
                 amount,
                 target_key: target_key.into(),

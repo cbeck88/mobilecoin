@@ -10,7 +10,7 @@ use mc_transaction_core::{
     onetime_keys::{recover_onetime_private_key, recover_public_subaddress_spend_key},
     ring_signature::KeyImage,
     tx::{TxOut, TxOutConfirmationNumber, TxOutMembershipProof},
-    Amount, CompressedCommitment,
+    CompressedCommitment, MaskedAmount,
 };
 use mc_transaction_std::{InputCredentials, NoMemoBuilder, TransactionBuilder};
 use mc_util_ffi::*;
@@ -43,7 +43,8 @@ pub extern "C" fn mc_tx_out_reconstruct_commitment(
 
         // FIXME: McTxOutAmount should include the masked_token_id bytes, which are 0 or
         // 4 bytes For now zero to avoid breaking changes to FFI
-        let (amount, _) = Amount::reconstruct(tx_out_amount.masked_value, &[], &shared_secret)?;
+        let (amount, _) =
+            MaskedAmount::reconstruct(tx_out_amount.masked_value, &[], &shared_secret)?;
 
         let out_tx_out_commitment = out_tx_out_commitment
             .into_mut()
@@ -172,7 +173,7 @@ pub extern "C" fn mc_tx_out_get_value(
 
         let shared_secret = get_tx_out_shared_secret(&view_private_key, &tx_out_public_key);
         let (_amount, amount_data) =
-            Amount::reconstruct(tx_out_amount.masked_value, &[], &shared_secret)?;
+            MaskedAmount::reconstruct(tx_out_amount.masked_value, &[], &shared_secret)?;
 
         // FIXME: This should also return the amount_data.token_id
         *out_value.into_mut() = amount_data.value;
