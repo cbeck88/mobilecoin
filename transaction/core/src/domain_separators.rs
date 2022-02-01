@@ -46,3 +46,12 @@ pub const RING_MLSAG_CHALLENGE_DOMAIN_TAG: &str = "mc_ring_mlsag_challenge";
 
 /// Domain separator for hashing the confirmation number
 pub const TXOUT_CONFIRMATION_NUMBER_DOMAIN_TAG: &str = "mc_tx_out_confirmation_number";
+
+/// Domain separator for hashing proof of opening secrets
+pub const PROOF_OF_OPENING_SECRET_DOMAIN_TAG: &str = "mc_proof_of_opening_secret";
+
+/// Domain separator for hashing proof of opening secrets
+pub const PROOF_OF_OPENING_PUBLIC_DOMAIN_TAG: &str = "mc_proof_of_opening_public";
+
+/// Domain separator for computing the extended message digest
+pub const EXTENDED_MESSAGE_DOMAIN_TAG: &str = "mc_extended_message";

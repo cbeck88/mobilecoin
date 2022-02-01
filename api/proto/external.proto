@@ -236,6 +236,12 @@ message TxPrefix {
     uint64 tombstone_block = 5;
 }
 
+message CompressedProofOfOpening {
+    CompressedRistretto d = 1;
+    CurveScalar u = 2;
+    CurveScalar v = 3;
+}
+
 message RingMLSAG {
     CurveScalar c_zero = 1;
     repeated CurveScalar responses = 2;
@@ -246,6 +252,7 @@ message SignatureRctBulletproofs {
     repeated RingMLSAG ring_signatures = 1;
     repeated CompressedRistretto pseudo_output_commitments = 2;
     bytes range_proofs = 3;
+    CompressedProofOfOpening proof_of_opening = 4;
 }
 
 message Tx {

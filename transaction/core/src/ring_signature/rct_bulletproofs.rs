@@ -13,7 +13,7 @@ use bulletproofs_og::RangeProof;
 use core::convert::TryFrom;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use mc_common::HashSet;
-use mc_crypto_digestible::Digestible;
+use mc_crypto_digestible::{DigestTranscript, Digestible, MerlinTranscript};
 use mc_crypto_keys::{CompressedRistrettoPublic, RistrettoPrivate};
 use mc_util_serial::prost::Message;
 use rand_core::{CryptoRng, RngCore};
@@ -21,12 +21,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     constants::FEE_BLINDING,
+    domain_separators::EXTENDED_MESSAGE_DOMAIN_TAG,
     range_proofs::{check_range_proofs, generate_range_proofs},
     ring_signature::{generators, mlsag::RingMLSAG, Error, KeyImage, Scalar},
-    Commitment, CompressedCommitment,
+    Commitment, CompressedCommitment, CompressedProofOfOpening, ProofOfOpening,
 };
 
-/// An RCT_TYPE_BULLETPROOFS_2 signature.
+/// An RCT_TYPE_BULLETPROOFS_2 signature, plus a proof of opening.
 #[derive(Clone, Digestible, Eq, PartialEq, Serialize, Deserialize, Message)]
 pub struct SignatureRctBulletproofs {
     /// Signature for each input ring.
@@ -43,6 +44,12 @@ pub struct SignatureRctBulletproofs {
     /// with Prost.
     #[prost(bytes, tag = "3")]
     pub range_proof_bytes: Vec<u8>,
+
+    /// Proof that all pseudo outputs are over the specified Pedersen
+    /// generators. This implies that all confidential token ids are of the
+    /// correct type.
+    #[prost(message, required, tag = "4")]
+    pub proof_of_opening: CompressedProofOfOpening,
 }
 
 impl SignatureRctBulletproofs {
@@ -161,18 +168,27 @@ impl SignatureRctBulletproofs {
                 .map_err(|_e| Error::RangeProofError)?;
         }
 
+        // Compute sum of pseudo outputs
+        let sum_of_pseudo_output_commitments: RistrettoPoint =
+            decompressed_pseudo_output_commitments
+                .iter()
+                .map(|commitment| commitment.point)
+                .sum();
+
+        // Verify proof of opening against sum of pseudo outputs
+        {
+            let proof_of_opening = ProofOfOpening::try_from(&self.proof_of_opening)?;
+            if !proof_of_opening.verify(&sum_of_pseudo_output_commitments, &generator) {
+                return Err(Error::InvalidProofOfOpening);
+            }
+        }
+
         // Output commitments - pseudo_outputs must be zero.
         {
             let sum_of_output_commitments: RistrettoPoint = decompressed_output_commitments
                 .iter()
                 .map(|commitment| commitment.point)
                 .sum();
-
-            let sum_of_pseudo_output_commitments: RistrettoPoint =
-                decompressed_pseudo_output_commitments
-                    .iter()
-                    .map(|commitment| commitment.point)
-                    .sum();
 
             // The implicit fee output.
             let fee_commitment = generator.commit(Scalar::from(fee), *FEE_BLINDING);
@@ -184,17 +200,18 @@ impl SignatureRctBulletproofs {
         }
 
         // Extend the message with the range proof and pseudo_output_commitments.
-        let extended_message = extend_message(
+        let extended_message_digest = extend_message(
             message,
             &self.pseudo_output_commitments,
             &self.range_proof_bytes,
+            &self.proof_of_opening,
         );
 
         // Each MLSAG must be valid.
         for (i, ring) in rings.iter().enumerate() {
             let ring_signature = &self.ring_signatures[i];
             let pseudo_output = self.pseudo_output_commitments[i];
-            ring_signature.verify(&extended_message, ring, &pseudo_output)?;
+            ring_signature.verify(&extended_message_digest, ring, &pseudo_output)?;
         }
 
         // Signature is valid.
@@ -302,6 +319,20 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
             .map_err(|_e| Error::RangeProofError)?
     };
 
+    let sum_of_pseudo_output_values: Scalar = pseudo_output_values_and_blindings
+        .iter()
+        .map(|(value, _)| Scalar::from(*value))
+        .sum();
+
+    let proof_of_opening: CompressedProofOfOpening = {
+        (&ProofOfOpening::new(
+            sum_of_pseudo_output_values,
+            sum_of_pseudo_output_blindings,
+            &generator,
+        ))
+            .into()
+    };
+
     if check_value_is_preserved {
         let sum_of_output_commitments: RistrettoPoint = output_values_and_blindings
             .iter()
@@ -332,7 +363,12 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
     // Extend the message with the range proof and pseudo_output_commitments.
     // This ensures that they are signed by each RingMLSAG.
     let range_proof_bytes = range_proof.to_bytes();
-    let extended_message = extend_message(message, &pseudo_output_commitments, &range_proof_bytes);
+    let extended_message_digest = extend_message(
+        message,
+        &pseudo_output_commitments,
+        &range_proof_bytes,
+        &proof_of_opening,
+    );
 
     // Prove that the signer is allowed to spend a public key in each ring, and that
     // the input's value equals the value of the pseudo_output.
@@ -341,7 +377,7 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         let real_index = real_input_indices[i];
         let (onetime_private_key, value, blinding) = input_secrets[i];
         let ring_signature = RingMLSAG::sign(
-            &extended_message,
+            &extended_message_digest,
             &rings[i],
             real_index,
             &onetime_private_key,
@@ -358,24 +394,27 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         ring_signatures,
         pseudo_output_commitments,
         range_proof_bytes,
+        proof_of_opening,
     })
 }
 
-/// Concatenates [message || pseudo_output_commitments || range_proof].
+/// Computes a merlin digest of message, pseudo_output_commitments, range proof,
+/// proof_of_opening
 fn extend_message(
     message: &[u8],
     pseudo_output_commitments: &[CompressedCommitment],
     range_proof_bytes: &[u8],
-) -> Vec<u8> {
-    let mut extended_message: Vec<u8> = Vec::with_capacity(
-        message.len() + pseudo_output_commitments.len() * 32 + range_proof_bytes.len(),
-    );
-    extended_message.extend_from_slice(message);
-    for commitment in pseudo_output_commitments {
-        extended_message.extend_from_slice(commitment.as_ref());
-    }
-    extended_message.extend_from_slice(range_proof_bytes);
-    extended_message
+    proof_of_opening: &CompressedProofOfOpening,
+) -> [u8; 32] {
+    let mut transcript = MerlinTranscript::new(EXTENDED_MESSAGE_DOMAIN_TAG.as_bytes());
+    message.append_to_transcript(b"message", &mut transcript);
+    pseudo_output_commitments.append_to_transcript(b"pseudo_output_commitments", &mut transcript);
+    range_proof_bytes.append_to_transcript(b"range_proof_bytes", &mut transcript);
+    proof_of_opening.append_to_transcript(b"proof_of_opening", &mut transcript);
+
+    let mut output = [0u8; 32];
+    transcript.extract_digest(&mut output);
+    output
 }
 
 #[cfg(test)]
@@ -532,7 +571,7 @@ mod rct_bulletproofs_tests {
     }
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(3))]
+        #![proptest_config(ProptestConfig::with_cases(6))]
 
         #[test]
         // `sign`should return an error if `rings` is empty.

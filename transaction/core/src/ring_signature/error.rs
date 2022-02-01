@@ -51,6 +51,9 @@ pub enum Error {
 
     /// Invalid RangeProof
     RangeProofError,
+
+    /// Invalid Proof Of Opening, this may indicate a problem with token ids
+    InvalidProofOfOpening,
 }
 
 impl From<mc_util_repr_bytes::LengthMismatch> for Error {
