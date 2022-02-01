@@ -26,10 +26,12 @@ use serde::{Deserialize, Serialize};
 mod commitment;
 mod compressed_commitment;
 mod error;
+mod proof_of_opening;
 
 pub use commitment::Commitment;
 pub use compressed_commitment::CompressedCommitment;
 pub use error::AmountError;
+pub use proof_of_opening::{CompressedProofOfOpening, ProofOfOpening};
 
 /// The data blinded by a MobileCoin amount commitment
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -452,7 +452,7 @@ mod mlsag_tests {
     }
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(3))]
+        #![proptest_config(ProptestConfig::with_cases(6))]
 
         #[test]
         // `sign` should return a signature with 2*ring_size responses.

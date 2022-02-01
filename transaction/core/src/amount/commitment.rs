@@ -21,6 +21,14 @@ pub struct Commitment {
 impl Commitment {
     /// Create a new commitment, given a value, blinding factor, and pedersen
     /// gens to use
+    ///
+    /// Note that the choice of generator implies what the token id is for this
+    /// value. The Pedersen generators should be `generators(token_id)`.
+    ///
+    /// Arguments:
+    /// * value: The (u64) value that we are committing to
+    /// * blinding: The blinding factor for the Pedersen commitment
+    /// * generators: The generators used to make the commitment
     pub fn new(value: u64, blinding: Scalar, generators: &PedersenGens) -> Self {
         Self {
             point: generators.commit(Scalar::from(value), blinding),

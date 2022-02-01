@@ -7,11 +7,8 @@
 use crate::domain_separators::HASH_TO_POINT_DOMAIN_TAG;
 use blake2::{Blake2b, Digest};
 pub use bulletproofs_og::{BulletproofGens, PedersenGens};
-pub use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::{
-    constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT},
-    ristretto::RistrettoPoint,
-};
+use curve25519_dalek::constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT};
+pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 pub use curve_scalar::*;
 pub use error::Error;
 pub use key_image::*;
