@@ -297,14 +297,16 @@ pub fn get_outputs<T: RngCore + CryptoRng>(
     recipient_and_amount
         .iter()
         .map(|(recipient, value)| {
-            TxOut::new(
+            let mut result = TxOut::new(
                 *value,
-                0,
+                *Mob::ID,
                 recipient,
                 &RistrettoPrivate::from_random(rng),
                 Default::default(),
             )
-            .unwrap()
+            .unwrap();
+            result.amount.masked_token_id = Default::default();
+            result
         })
         .collect()
 }

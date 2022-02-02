@@ -109,6 +109,12 @@ struct FieldAttributeConfig {
     /// new fields without affecting the hash of existing objects that do
     /// not have the field set.
     pub omit_when: Option<Lit>,
+
+    /// Allows skipping the hashing of a field if is_empty returns false.
+    /// This works around short-comings of omit_when, because `Default::default`
+    /// is not a literal and so cannot be parsed as such. Additionally sometimes
+    /// the compiler cannot infer the type for the Default.
+    pub omit_empty: bool,
 }
 
 impl FieldAttributeConfig {
@@ -116,7 +122,7 @@ impl FieldAttributeConfig {
     pub fn apply_meta(&mut self, nested_meta: &NestedMeta) -> Result<(), &'static str> {
         match nested_meta {
             NestedMeta::Lit(_) => {
-                return Err("Unexpected digestible literal attribute");
+                return Err("Unexpected literal field attribute");
             }
             NestedMeta::Meta(meta) => match meta {
                 Meta::NameValue(mnv) => {
@@ -125,6 +131,19 @@ impl FieldAttributeConfig {
                             self.omit_when = Some(mnv.lit.clone());
                         } else {
                             return Err("omit_when cannot appear twice as an attribute");
+                        }
+                    } else if mnv.path.is_ident("omit") {
+                        if let Lit::Str(lit_str) = mnv.lit.clone() {
+                            if lit_str.value() == "empty" {
+                                if self.omit_empty {
+                                    return Err("omit = cannot appear twice as an attribute");
+                                }
+                                self.omit_empty = true;
+                            } else {
+                                return Err("unexpected value for omit =");
+                            }
+                        } else {
+                            return Err("unexpected syntax for omit =");
                         }
                     } else {
                         return Err("unexpected digestible feature attribute");
@@ -229,10 +248,17 @@ fn try_digestible_struct(
                 Some(field_ident) => {
                     // Read any #[digestible(...)]` attributes on this field and parse them
                     let attr_config = FieldAttributeConfig::try_from(&field.attrs[..])?;
+                    if attr_config.omit_empty && attr_config.omit_when.is_some() { return Err("Cannot combine omit_when and omit_default"); }
 
                     if let Some(omit_when) = attr_config.omit_when {
                         Ok(quote! {
                             if self.#field_ident != #omit_when {
+                                self.#field_ident.append_to_transcript_allow_omit(stringify!(#field_ident).as_bytes(), transcript);
+                            }
+                        })
+                    } else if attr_config.omit_empty {
+                        Ok(quote! {
+                            if !self.#field_ident.is_empty() {
                                 self.#field_ident.append_to_transcript_allow_omit(stringify!(#field_ident).as_bytes(), transcript);
                             }
                         })

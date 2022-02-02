@@ -58,6 +58,7 @@ pub struct Amount {
     /// shared_secret)` 4 bytes long when used, 0 bytes for older amounts
     /// that don't have this.
     #[prost(bytes, tag = "3")]
+    #[digestible(omit = "empty")]
     pub masked_token_id: Vec<u8>,
 }
 
