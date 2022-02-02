@@ -110,7 +110,9 @@ impl ProofOfOpening {
         let u = y + (e * x);
         let v = s + (e * r);
 
-        Self { d, u, v }
+        let result = Self { d, u, v };
+        debug_assert!(result.verify(target_commitment, gens));
+        result
     }
 
     /// Verify the proof of opening relative to the target commitment, and

@@ -84,6 +84,7 @@ impl SignatureRctBulletproofs {
             fee,
             token_id,
             true,
+            true,
             rng,
         )
     }
@@ -175,14 +176,6 @@ impl SignatureRctBulletproofs {
                 .map(|commitment| commitment.point)
                 .sum();
 
-        // Verify proof of opening against sum of pseudo outputs
-        {
-            let proof_of_opening = ProofOfOpening::try_from(&self.proof_of_opening)?;
-            if !proof_of_opening.verify(&sum_of_pseudo_output_commitments, &generator) {
-                return Err(Error::InvalidProofOfOpening);
-            }
-        }
-
         // Output commitments - pseudo_outputs must be zero.
         {
             let sum_of_output_commitments: RistrettoPoint = decompressed_output_commitments
@@ -214,6 +207,14 @@ impl SignatureRctBulletproofs {
             ring_signature.verify(&extended_message_digest, ring, &pseudo_output)?;
         }
 
+        // Verify proof of opening against sum of pseudo outputs
+        {
+            let proof_of_opening = ProofOfOpening::try_from(&self.proof_of_opening)?;
+            if !proof_of_opening.verify(&sum_of_pseudo_output_commitments, &generator) {
+                return Err(Error::InvalidProofOfOpening);
+            }
+        }
+
         // Signature is valid.
         Ok(())
     }
@@ -239,7 +240,8 @@ impl SignatureRctBulletproofs {
 ///   commitment.
 /// * `fee` - Value of the implicit fee output.
 /// * `check_value_is_preserved` - If true, check that the value of inputs
-///   equals value of outputs.
+/// * `check_proof_of_opening` - If true, check that the proof of opening is
+///   valid equals value of outputs.
 fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
     message: &[u8; 32],
     rings: &[Vec<(CompressedRistrettoPublic, CompressedCommitment)>],
@@ -249,6 +251,7 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
     fee: u64,
     token_id: u32,
     check_value_is_preserved: bool,
+    check_proof_of_opening: bool,
     rng: &mut CSPRNG,
 ) -> Result<SignatureRctBulletproofs, Error> {
     if rings.is_empty() {
@@ -325,12 +328,21 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         .sum();
 
     let proof_of_opening: CompressedProofOfOpening = {
-        (&ProofOfOpening::new(
+        let proof = ProofOfOpening::new(
             sum_of_pseudo_output_values,
-            sum_of_pseudo_output_blindings,
+            sum_of_pseudo_output_blindings + last_blinding,
             &generator,
-        ))
-            .into()
+        );
+        if check_proof_of_opening {
+            let sum_of_pseudo_output_commitments: RistrettoPoint =
+                pseudo_output_values_and_blindings
+                    .iter()
+                    .map(|(value, blinding)| generator.commit(Scalar::from(*value), *blinding))
+                    .sum();
+            // FIXME: This should return an error
+            assert!(proof.verify(&sum_of_pseudo_output_commitments, &generator));
+        }
+        (&proof).into()
     };
 
     if check_value_is_preserved {
@@ -359,6 +371,21 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         .take(num_inputs)
         .map(CompressedCommitment::from)
         .collect();
+
+    if check_proof_of_opening {
+        let pseudo_output_commitments = pseudo_output_commitments
+            .iter()
+            .map(Commitment::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let sum_of_pseudo_output_commitments =
+            pseudo_output_commitments.iter().map(|x| x.point).sum();
+
+        let proof_of_opening = ProofOfOpening::try_from(&proof_of_opening).unwrap();
+        if !proof_of_opening.verify(&sum_of_pseudo_output_commitments, &generator) {
+            // FIXME: This should return an error
+            panic!("proof of opening was unsound");
+        }
+    }
 
     // Extend the message with the range proof and pseudo_output_commitments.
     // This ensures that they are signed by each RingMLSAG.
@@ -565,6 +592,7 @@ mod rct_bulletproofs_tests {
                 fee,
                 self.token_id,
                 false,
+                false,
                 rng,
             )
         }
@@ -655,7 +683,7 @@ mod rct_bulletproofs_tests {
                 params.token_id,
                 &mut rng,
             );
-            assert!(result.is_ok());
+            result.unwrap();
         }
 
         #[test]
@@ -833,7 +861,7 @@ mod rct_bulletproofs_tests {
                 params.token_id,
                 &mut rng,
             );
-            assert!(result.is_ok());
+            result.unwrap();
 
             // Verify should fail if the signature disagrees with the fee.
             let wrong_fee = fee + 1;
