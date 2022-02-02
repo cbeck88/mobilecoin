@@ -23,9 +23,7 @@ use alloc::{
     string::String,
     vec::Vec,
 };
-use core::{
-    convert::TryFrom,
-};
+use core::convert::TryFrom;
 use identity::Ed25519Identity;
 use mc_account_keys::PublicAddress;
 use mc_attest_core::{

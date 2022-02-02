@@ -20,6 +20,7 @@ mod block_signature;
 // external
 mod account_key;
 mod amount;
+mod compressed_proof_of_opening;
 mod compressed_ristretto;
 mod curve_scalar;
 mod ed25519_signature;

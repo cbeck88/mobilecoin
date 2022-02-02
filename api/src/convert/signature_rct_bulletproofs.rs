@@ -3,7 +3,7 @@
 use crate::{convert::ConversionError, external};
 use mc_transaction_core::{
     ring_signature::{RingMLSAG, SignatureRctBulletproofs},
-    CompressedCommitment,
+    CompressedCommitment, CompressedProofOfOpening,
 };
 use std::convert::TryFrom;
 
@@ -27,6 +27,8 @@ impl From<&SignatureRctBulletproofs> for external::SignatureRctBulletproofs {
 
         signature.set_range_proofs(source.range_proof_bytes.clone());
 
+        signature.set_proof_of_opening((&source.proof_of_opening).into());
+
         signature
     }
 }
@@ -48,10 +50,13 @@ impl TryFrom<&external::SignatureRctBulletproofs> for SignatureRctBulletproofs {
 
         let range_proof_bytes = source.get_range_proofs().to_vec();
 
+        let proof_of_opening = CompressedProofOfOpening::try_from(source.get_proof_of_opening())?;
+
         Ok(SignatureRctBulletproofs {
             ring_signatures,
             pseudo_output_commitments,
             range_proof_bytes,
+            proof_of_opening,
         })
     }
 }
