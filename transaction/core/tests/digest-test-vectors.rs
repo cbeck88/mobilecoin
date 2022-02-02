@@ -29,6 +29,8 @@ fn test_origin_tx_outs() -> Vec<TxOut> {
             .expect("Could not create TxOut");
             // Origin TxOuts do not have encrypted memo fields.
             tx_out.e_memo = None;
+            // Origin TxOuts do not have masked token id
+            tx_out.amount.masked_token_id = Default::default();
             tx_out
         })
         .collect()
