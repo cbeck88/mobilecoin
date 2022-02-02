@@ -1256,7 +1256,10 @@ pub mod transaction_builder_tests {
                     &RistrettoPublic::try_from(&output.public_key).unwrap(),
                 );
                 let (amount_data, _) = output.amount.get_value(&ss).unwrap();
-                assert_eq!(amount_data.value, value - change_value - Mob::MINIMUM_FEE * 4);
+                assert_eq!(
+                    amount_data.value,
+                    value - change_value - Mob::MINIMUM_FEE * 4
+                );
                 assert_eq!(amount_data.token_id, token_id);
 
                 let memo = output.e_memo.clone().unwrap().decrypt(&ss);
