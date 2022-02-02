@@ -333,15 +333,6 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
             sum_of_pseudo_output_blindings + last_blinding,
             &generator,
         );
-        if check_proof_of_opening {
-            let sum_of_pseudo_output_commitments: RistrettoPoint =
-                pseudo_output_values_and_blindings
-                    .iter()
-                    .map(|(value, blinding)| generator.commit(Scalar::from(*value), *blinding))
-                    .sum();
-            // FIXME: This should return an error
-            assert!(proof.verify(&sum_of_pseudo_output_commitments, &generator));
-        }
         (&proof).into()
     };
 
@@ -373,17 +364,15 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         .collect();
 
     if check_proof_of_opening {
-        let pseudo_output_commitments = pseudo_output_commitments
+        let sum_of_pseudo_output_commitments = commitments
             .iter()
-            .map(Commitment::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let sum_of_pseudo_output_commitments =
-            pseudo_output_commitments.iter().map(|x| x.point).sum();
+            .take(num_inputs)
+            .filter_map(|x| x.decompress())
+            .sum();
 
         let proof_of_opening = ProofOfOpening::try_from(&proof_of_opening).unwrap();
         if !proof_of_opening.verify(&sum_of_pseudo_output_commitments, &generator) {
-            // FIXME: This should return an error
-            panic!("proof of opening was unsound");
+            return Err(Error::InvalidProofOfOpening);
         }
     }
 
