@@ -3,13 +3,13 @@
 //! Serializeable data types that wrap the mobilecoind API.
 
 use mc_api::external::{
-    Amount, CompressedRistretto, EncryptedFogHint, EncryptedMemo, KeyImage, PublicAddress,
-    RingMLSAG, SignatureRctBulletproofs, Tx, TxIn, TxOutMembershipElement, TxOutMembershipHash,
-    TxOutMembershipProof, TxPrefix,
+    Amount, CompressedProofOfOpening, CompressedRistretto, EncryptedFogHint, EncryptedMemo,
+    KeyImage, PublicAddress, RingMLSAG, SignatureRctBulletproofs, Tx, TxIn, TxOutMembershipElement,
+    TxOutMembershipHash, TxOutMembershipProof, TxPrefix,
 };
 use protobuf::RepeatedField;
 use serde_derive::{Deserialize, Serialize};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Deserialize, Default, Debug)]
 pub struct JsonPasswordRequest {
@@ -832,10 +832,52 @@ impl From<&RingMLSAG> for JsonRingMLSAG {
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone)]
+pub struct JsonCompressedProofOfOpening {
+    pub d: String,
+    pub u: String,
+    pub v: String,
+}
+
+impl From<&CompressedProofOfOpening> for JsonCompressedProofOfOpening {
+    fn from(src: &CompressedProofOfOpening) -> Self {
+        Self {
+            d: hex::encode(src.get_d().get_data()),
+            u: hex::encode(src.get_u().get_data()),
+            v: hex::encode(src.get_v().get_data()),
+        }
+    }
+}
+
+impl TryFrom<&JsonCompressedProofOfOpening> for CompressedProofOfOpening {
+    type Error = String;
+
+    fn try_from(src: &JsonCompressedProofOfOpening) -> Result<CompressedProofOfOpening, String> {
+        let mut d = CompressedRistretto::new();
+        d.set_data(hex::decode(&src.d).map_err(|err| format!("Failed to decode hex: {}", err))?);
+
+        let mut u = mc_api::external::CurveScalar::new();
+        u.set_data(
+            hex::decode(&src.u).map_err(|err| format!("Could not decode from hex: {}", err))?,
+        );
+
+        let mut v = mc_api::external::CurveScalar::new();
+        v.set_data(
+            hex::decode(&src.v).map_err(|err| format!("Could not decode from hex: {}", err))?,
+        );
+        let mut result = CompressedProofOfOpening::new();
+        result.set_d(d);
+        result.set_u(u);
+        result.set_v(v);
+        Ok(result)
+    }
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone)]
 pub struct JsonSignatureRctBulletproofs {
     pub ring_signatures: Vec<JsonRingMLSAG>,
     pub pseudo_output_commitments: Vec<String>,
-    range_proofs: String,
+    pub range_proofs: String,
+    pub proof_of_opening: JsonCompressedProofOfOpening,
 }
 
 impl From<&SignatureRctBulletproofs> for JsonSignatureRctBulletproofs {
@@ -852,6 +894,7 @@ impl From<&SignatureRctBulletproofs> for JsonSignatureRctBulletproofs {
                 .map(|x| hex::encode(x.get_data()))
                 .collect(),
             range_proofs: hex::encode(src.get_range_proofs().to_vec()),
+            proof_of_opening: src.get_proof_of_opening().into(),
         }
     }
 }
@@ -907,6 +950,7 @@ impl TryFrom<&JsonSignatureRctBulletproofs> for SignatureRctBulletproofs {
         let proofs_bytes = hex::decode(&src.range_proofs)
             .map_err(|err| format!("Could not decode from hex: {}", err))?;
         signature.set_range_proofs(proofs_bytes);
+        signature.set_proof_of_opening((&src.proof_of_opening).try_into()?);
 
         Ok(signature)
     }
