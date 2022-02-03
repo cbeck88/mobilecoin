@@ -497,6 +497,7 @@ impl TryFrom<&JsonOutlay> for mc_mobilecoind_api::Outlay {
 pub struct JsonAmount {
     pub commitment: String,
     pub masked_value: String,
+    pub masked_token_id: String,
 }
 
 impl From<&Amount> for JsonAmount {
@@ -504,6 +505,7 @@ impl From<&Amount> for JsonAmount {
         Self {
             commitment: hex::encode(src.get_commitment().get_data()),
             masked_value: src.get_masked_value().to_string(),
+            masked_token_id: hex::encode(src.get_masked_token_id()),
         }
     }
 }
@@ -546,6 +548,10 @@ impl TryFrom<&JsonTxOut> for mc_api::external::TxOut {
                 .masked_value
                 .parse::<u64>()
                 .map_err(|err| format!("Failed to parse u64 from value: {}", err))?,
+        );
+        amount.set_masked_token_id(
+            hex::decode(&src.amount.masked_token_id)
+                .map_err(|err| format!("Failed to decode masked token id hex: {}", err))?,
         );
         let mut target_key = CompressedRistretto::new();
         target_key.set_data(
