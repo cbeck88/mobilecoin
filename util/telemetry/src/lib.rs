@@ -9,6 +9,7 @@ pub use opentelemetry::{
 
 use opentelemetry::{
     global::{tracer_provider, BoxedTracer},
+    sdk::{trace::Config, Resource},
     trace::{SpanBuilder, TraceId, TracerProvider},
 };
 use std::borrow::Cow;
