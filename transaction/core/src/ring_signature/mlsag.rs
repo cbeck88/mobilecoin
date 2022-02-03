@@ -131,7 +131,7 @@ impl RingMLSAG {
         // Uncompressed output commitment.
         // This ensures that each address and commitment encodes a valid Ristretto
         // point.
-        let output_commitment = Commitment::new(value, *output_blinding, &generator);
+        let output_commitment = Commitment::new(value, *output_blinding, generator);
 
         // Ring must decompress.
         let decompressed_ring = decompress_ring(ring)?;

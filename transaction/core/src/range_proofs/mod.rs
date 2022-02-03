@@ -47,7 +47,7 @@ pub fn generate_range_proofs<T: RngCore + CryptoRng>(
     // Create a 64-bit RangeProof and corresponding commitments.
     RangeProof::prove_multiple_with_rng(
         &BP_GENERATORS,
-        &pedersen_generators,
+        pedersen_generators,
         &mut Transcript::new(BULLETPROOF_DOMAIN_TAG.as_ref()),
         &values_padded,
         &blindings_padded,
@@ -77,7 +77,7 @@ pub fn check_range_proofs<T: RngCore + CryptoRng>(
     range_proof
         .verify_multiple_with_rng(
             &BP_GENERATORS,
-            &pedersen_generators,
+            pedersen_generators,
             &mut Transcript::new(BULLETPROOF_DOMAIN_TAG.as_ref()),
             &resized_commitments,
             64,

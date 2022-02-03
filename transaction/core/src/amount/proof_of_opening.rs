@@ -3,6 +3,8 @@
 //! TODO: Add appropriate references
 //! (Page 27): https://www.cs.purdue.edu/homes/ninghui/courses/555_Spring12/handouts/555_Spring12_topic23.pdf
 
+#![allow(clippy::many_single_char_names)]
+
 use crate::{
     domain_separators::{PROOF_OF_OPENING_PUBLIC_DOMAIN_TAG, PROOF_OF_OPENING_SECRET_DOMAIN_TAG},
     ring_signature::{CurveScalar, PedersenGens},
@@ -74,7 +76,7 @@ impl ProofOfOpening {
         target_commitment: &RistrettoPoint,
     ) -> Self {
         debug_assert!(
-            target_commitment.clone() == gens.commit(value, blinding),
+            *target_commitment == gens.commit(value, blinding),
             "bad target commitment was passed"
         );
 
@@ -101,7 +103,7 @@ impl ProofOfOpening {
         let d = gens.commit(y, s);
 
         // Make the challenge value "e" based on the transcript the verifier can see
-        let e = Self::compute_challenge_value(&target_commitment, &d);
+        let e = Self::compute_challenge_value(target_commitment, &d);
 
         let x = value;
         let r = blinding;
