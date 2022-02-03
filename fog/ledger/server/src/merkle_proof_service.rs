@@ -215,8 +215,9 @@ mod test {
         encrypted_fog_hint::{EncryptedFogHint, ENCRYPTED_FOG_HINT_LEN},
         membership_proofs::Range,
         onetime_keys::{create_shared_secret, create_tx_out_public_key, create_tx_out_target_key},
+        tokens::Mob,
         tx::{TxOut, TxOutMembershipElement, TxOutMembershipProof},
-        Amount, AmountData,
+        Amount, AmountData, Token,
     };
     use mc_util_from_random::FromRandom;
     use mc_util_grpc::AnonymousAuthenticator;
@@ -246,7 +247,7 @@ mod test {
             // may be fine, or we may want a more robust mock ledger populator.
             let amount_data = AmountData {
                 value: value + output_index as u64,
-                token_id: 0,
+                token_id: Mob::ID,
             };
             let amount = Amount::new(amount_data, &shared_secret).unwrap();
             let tx_out = TxOut {

@@ -621,7 +621,7 @@ fn mint_aggregate_fee(
 
         let amount_data = AmountData {
             value: total_fee,
-            token_id,
+            token_id: token_id.into(),
         };
         let amount = Amount::new(amount_data, &shared_secret)
             .map_err(|e| Error::FormBlock(format!("AmountError: {:?}", e)))?;
@@ -646,8 +646,8 @@ mod tests {
     use mc_common::logger::test_with_logger;
     use mc_ledger_db::Ledger;
     use mc_transaction_core::{
-        onetime_keys::view_key_matches_output, tx::TxOutMembershipHash,
-        validation::TransactionValidationError,
+        onetime_keys::view_key_matches_output, tokens::Mob, tx::TxOutMembershipHash,
+        validation::TransactionValidationError, Token,
     };
     use mc_transaction_core_test_utils::{
         create_ledger, create_transaction, initialize_ledger, AccountKey, ViewKey,
@@ -947,7 +947,7 @@ mod tests {
         let shared_secret = create_shared_secret(&fee_output_public_key, &view_secret_key);
         let (amount_data, _blinding) = fee_output.amount.get_value(&shared_secret).unwrap();
         assert_eq!(amount_data.value, total_fee);
-        assert_eq!(amount_data.token_id, 0);
+        assert_eq!(amount_data.token_id, Mob::ID);
     }
 
     #[test_with_logger]

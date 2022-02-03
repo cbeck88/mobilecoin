@@ -39,8 +39,9 @@ use mc_transaction_core::{
     get_tx_out_shared_secret,
     onetime_keys::{create_shared_secret, recover_onetime_private_key},
     ring_signature::KeyImage,
+    tokens::Mob,
     tx::{Tx, TxOut, TxOutConfirmationNumber, TxOutMembershipProof},
-    Amount, CompressedCommitment,
+    Amount, CompressedCommitment, Token,
 };
 use mc_transaction_std::{InputCredentials, NoMemoBuilder, TransactionBuilder};
 use mc_util_from_random::FromRandom;
@@ -1152,8 +1153,8 @@ pub unsafe extern "C" fn Java_com_mobilecoin_lib_TransactionBuilder_init_1jni(
             env.get_rust_field(fog_resolver, RUST_OBJ_FIELD)?;
         // TODO: After servers that support memos are deployed, use RTHMemoBuilder here
         let memo_builder = NoMemoBuilder::default();
-        // FIXME: The token id should be a parameter and not hard coded to zero here
-        let tx_builder = TransactionBuilder::new(0, fog_resolver.clone(), memo_builder);
+        // FIXME: The token id should be a parameter and not hard coded to Mob here
+        let tx_builder = TransactionBuilder::new(Mob::ID, fog_resolver.clone(), memo_builder);
         Ok(env.set_rust_field(obj, RUST_OBJ_FIELD, tx_builder)?)
     })
 }

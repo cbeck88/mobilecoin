@@ -32,7 +32,9 @@ mod tests {
     use mc_crypto_keys::RistrettoPublic;
     use mc_transaction_core::{
         onetime_keys::recover_onetime_private_key,
+        tokens::Mob,
         tx::{Tx, TxOut, TxOutMembershipProof},
+        Token,
     };
     use mc_transaction_core_test_utils::MockFogResolver;
     use mc_transaction_std::{EmptyMemoBuilder, InputCredentials, TransactionBuilder};
@@ -62,8 +64,11 @@ mod tests {
             mc_transaction_core_test_utils::get_outputs(&recipient_and_amounts, &mut rng)
         };
 
-        let mut transaction_builder =
-            TransactionBuilder::new(0, MockFogResolver::default(), EmptyMemoBuilder::default());
+        let mut transaction_builder = TransactionBuilder::new(
+            Mob::ID,
+            MockFogResolver::default(),
+            EmptyMemoBuilder::default(),
+        );
 
         let ring: Vec<TxOut> = minted_outputs.clone();
         let public_key = RistrettoPublic::try_from(&minted_outputs[0].public_key).unwrap();

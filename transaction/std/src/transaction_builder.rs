@@ -17,7 +17,7 @@ use mc_transaction_core::{
     ring_signature::SignatureRctBulletproofs,
     tokens::Mob,
     tx::{Tx, TxIn, TxOut, TxOutConfirmationNumber, TxPrefix},
-    CompressedCommitment, MemoContext, MemoPayload, NewMemoError, Token,
+    CompressedCommitment, MemoContext, MemoPayload, NewMemoError, Token, TokenId,
 };
 use mc_util_from_random::FromRandom;
 use rand_core::{CryptoRng, RngCore};
@@ -42,7 +42,7 @@ pub struct TransactionBuilder<FPR: FogPubkeyResolver> {
     /// The fee paid in connection to this transaction
     fee: u64,
     /// The token id for this transaction
-    token_id: u32,
+    token_id: TokenId,
     /// The source of validated fog pubkeys used for this transaction
     fog_resolver: FPR,
     /// The limit on the tombstone block value imposed pubkey_expiry values in
@@ -67,7 +67,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
     /// * `memo_builder` - An object which creates memos for the TxOuts in this
     ///   transaction
     pub fn new<MB: MemoBuilder + 'static + Send + Sync>(
-        token_id: u32,
+        token_id: TokenId,
         fog_resolver: FPR,
         memo_builder: MB,
     ) -> Self {
@@ -83,7 +83,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
     /// * `memo_builder` - An object which creates memos for the TxOuts in this
     ///   transaction
     pub fn new_with_box(
-        token_id: u32,
+        token_id: TokenId,
         fog_resolver: FPR,
         memo_builder: Box<dyn MemoBuilder + Send + Sync>,
     ) -> Self {
@@ -326,7 +326,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
             inputs,
             outputs,
             self.fee,
-            self.token_id,
+            *self.token_id,
             self.tombstone_block,
         );
 
@@ -373,7 +373,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
             &input_secrets,
             &output_values_and_blindings,
             self.fee,
-            self.token_id,
+            *self.token_id,
             rng,
         )?;
 
@@ -395,7 +395,7 @@ impl<FPR: FogPubkeyResolver> TransactionBuilder<FPR> {
 /// * `rng` -
 fn create_output_with_fog_hint<RNG: CryptoRng + RngCore>(
     value: u64,
-    token_id: u32,
+    token_id: TokenId,
     recipient: &PublicAddress,
     fog_hint: EncryptedFogHint,
     memo_fn: impl FnOnce(MemoContext) -> Result<Option<MemoPayload>, NewMemoError>,
@@ -476,7 +476,7 @@ pub mod transaction_builder_tests {
         rng: &mut RNG,
     ) -> Result<(TxOut, RistrettoPublic), TxBuilderError> {
         let (hint, _pubkey_expiry) = create_fog_hint(recipient, fog_resolver, rng)?;
-        let token_id = 0;
+        let token_id = Mob::ID;
         create_output_with_fog_hint(
             value,
             token_id,
@@ -573,7 +573,7 @@ pub mod transaction_builder_tests {
         fog_resolver: FPR,
         rng: &mut RNG,
     ) -> Result<Tx, TxBuilderError> {
-        let token_id = 0;
+        let token_id = Mob::ID;
         let mut transaction_builder =
             TransactionBuilder::new(token_id, fog_resolver.clone(), EmptyMemoBuilder::default());
         let input_value = 1000;
@@ -614,7 +614,7 @@ pub mod transaction_builder_tests {
         let membership_proofs = input_credentials.membership_proofs.clone();
         let key_image = KeyImage::from(&input_credentials.onetime_private_key);
 
-        let token_id = 0;
+        let token_id = Mob::ID;
         let mut transaction_builder =
             TransactionBuilder::new(token_id, fpr, EmptyMemoBuilder::default());
 
@@ -683,7 +683,7 @@ pub mod transaction_builder_tests {
         let membership_proofs = input_credentials.membership_proofs.clone();
         let key_image = KeyImage::from(&input_credentials.onetime_private_key);
 
-        let token_id = 0;
+        let token_id = Mob::ID;
         let mut transaction_builder =
             TransactionBuilder::new(token_id, fog_resolver, EmptyMemoBuilder::default());
 
@@ -760,7 +760,7 @@ pub mod transaction_builder_tests {
                 },
         });
 
-        let token_id = 0;
+        let token_id = Mob::ID;
         let mut transaction_builder =
             TransactionBuilder::new(token_id, fog_resolver.clone(), EmptyMemoBuilder::default());
 
@@ -825,7 +825,7 @@ pub mod transaction_builder_tests {
         });
 
         {
-            let token_id = 0;
+            let token_id = Mob::ID;
             let mut transaction_builder = TransactionBuilder::new(
                 token_id,
                 fog_resolver.clone(),
@@ -852,7 +852,7 @@ pub mod transaction_builder_tests {
         }
 
         {
-            let token_id = 0;
+            let token_id = Mob::ID;
             let mut transaction_builder = TransactionBuilder::new(
                 token_id,
                 fog_resolver.clone(),
@@ -889,7 +889,7 @@ pub mod transaction_builder_tests {
         let recipient = AccountKey::random_with_fog(&mut rng);
         let recipient_address = recipient.default_subaddress();
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
-        let token_id = 0;
+        let token_id = Mob::ID;
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
 
@@ -1039,7 +1039,7 @@ pub mod transaction_builder_tests {
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
-        let token_id = 0;
+        let token_id = Mob::ID;
 
         let fog_resolver = MockFogResolver(btreemap! {
                             recipient_address
@@ -1703,7 +1703,7 @@ pub mod transaction_builder_tests {
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
-        let token_id = 0;
+        let token_id = Mob::ID;
 
         let fog_resolver = MockFogResolver(btreemap! {
                             bob_address
@@ -1862,7 +1862,7 @@ pub mod transaction_builder_tests {
         let ingest_private_key = RistrettoPrivate::from_random(&mut rng);
         let value = 1475 * MILLIMOB_TO_PICOMOB;
         let change_value = 128 * MILLIMOB_TO_PICOMOB;
-        let token_id = 0;
+        let token_id = Mob::ID;
 
         let fog_resolver = MockFogResolver(btreemap! {
                             recipient_address
@@ -1942,7 +1942,7 @@ pub mod transaction_builder_tests {
         let alice = AccountKey::random(&mut rng);
         let bob = AccountKey::random(&mut rng);
         let value = 1475;
-        let token_id = 0;
+        let token_id = Mob::ID;
 
         // Mint an initial collection of outputs, including one belonging to Alice.
         let (ring, real_index) = get_ring(3, &alice, value, &fpr, &mut rng);

@@ -78,7 +78,9 @@ mod tests {
     use super::*;
     use generic_array::GenericArray;
     use mc_crypto_keys::RistrettoPublic;
-    use mc_transaction_core::{encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, Amount, AmountData};
+    use mc_transaction_core::{
+        encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, tokens::Mob, Amount, AmountData, Token,
+    };
     use mc_util_from_random::FromRandom;
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -89,7 +91,7 @@ mod tests {
 
         let amount_data = AmountData {
             value: 1u64 << 13,
-            token_id: 0,
+            token_id: Mob::ID,
         };
         let source = tx::TxOut {
             amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),
@@ -112,7 +114,7 @@ mod tests {
 
         let amount_data = AmountData {
             value: 1u64 << 13,
-            token_id: 0,
+            token_id: Mob::ID,
         };
         let source = tx::TxOut {
             amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),

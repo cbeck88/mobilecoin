@@ -1,6 +1,6 @@
 // Copyright (c) 2018-2021 The MobileCoin Foundation
 
-use crate::{ring_signature::CurveScalar, Amount, AmountData};
+use crate::{ring_signature::CurveScalar, tokens::Mob, Amount, AmountData, Token};
 use curve25519_dalek::scalar::Scalar;
 use mc_crypto_keys::{RistrettoPrivate, RistrettoPublic};
 use proptest::prelude::*;
@@ -32,7 +32,7 @@ prop_compose! {
                 (value in 0..=max_value) -> Amount {
             let amount_data = AmountData {
                 value,
-                token_id: 0,
+                token_id: Mob::ID,
             };
             Amount::new(amount_data, &shared_secret).unwrap()
     }

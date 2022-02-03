@@ -1344,7 +1344,9 @@ mod test {
     use super::*;
     use mc_crypto_keys::RistrettoPublic;
     use mc_ledger_db::Ledger;
-    use mc_transaction_core::{encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, Amount, AmountData};
+    use mc_transaction_core::{
+        encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN, tokens::Mob, Amount, AmountData, Token,
+    };
     use mc_transaction_core_test_utils::{
         create_ledger, create_transaction, initialize_ledger, AccountKey,
     };
@@ -1380,7 +1382,7 @@ mod test {
         let utxo = {
             let amount_data = AmountData {
                 value: 1u64 << 13,
-                token_id: 0,
+                token_id: Mob::ID,
             };
             let tx_out = mc_transaction_core::tx::TxOut {
                 amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),

@@ -2807,8 +2807,11 @@ mod test {
 
         // Insert into database.
         let monitor_id = mobilecoind_db.add_monitor(&data).unwrap();
-        let mut transaction_builder =
-            TransactionBuilder::new(0, MockFogResolver::default(), NoMemoBuilder::default());
+        let mut transaction_builder = TransactionBuilder::new(
+            Mob::ID,
+            MockFogResolver::default(),
+            NoMemoBuilder::default(),
+        );
         let (tx_out, tx_confirmation) = transaction_builder
             .add_output(10, &receiver.subaddress(0), &mut rng)
             .unwrap();
@@ -3441,7 +3444,7 @@ mod test {
                     })
                     .expect("There should be an output belonging to the account key.");
 
-                assert_eq!(amount_data.token_id, 0);
+                assert_eq!(amount_data.token_id, Mob::ID);
                 assert_eq!(amount_data.value, *expected_value);
             }
 
@@ -3731,7 +3734,7 @@ mod test {
             get_tx_out_shared_secret(data.account_key.view_private_key(), &tx_public_key);
         let (amount_data, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
         assert_eq!(amount_data.value, tx_proposal.outlays[0].value);
-        assert_eq!(amount_data.token_id, 0);
+        assert_eq!(amount_data.token_id, Mob::ID);
 
         // Santity test fee
         assert_eq!(tx_proposal.fee(), Mob::MINIMUM_FEE);
@@ -3810,7 +3813,7 @@ mod test {
         let shared_secret = get_tx_out_shared_secret(receiver.view_private_key(), &tx_public_key);
         let (amount_data, _blinding) = tx_out.amount.get_value(&shared_secret).unwrap();
         assert_eq!(amount_data.value, expected_value);
-        assert_eq!(amount_data.token_id, 0);
+        assert_eq!(amount_data.token_id, Mob::ID);
     }
 
     #[test_with_logger]
@@ -4770,7 +4773,7 @@ mod test {
                             .expect("Malformed amount");
 
                         assert_eq!(total_value - test_amount - fee, amount_data.value);
-                        assert_eq!(amount_data.token_id, 0);
+                        assert_eq!(amount_data.token_id, Mob::ID);
                     }
                 }
                 Err(Error::SubaddressSPKNotFound) => continue,
@@ -4893,8 +4896,11 @@ mod test {
         let root_id = RootIdentity::from(&root_entropy);
         let account_key = AccountKey::from(&root_id);
 
-        let mut transaction_builder =
-            TransactionBuilder::new(0, MockFogResolver::default(), NoMemoBuilder::default());
+        let mut transaction_builder = TransactionBuilder::new(
+            Mob::ID,
+            MockFogResolver::default(),
+            NoMemoBuilder::default(),
+        );
         let (tx_out, _tx_confirmation) = transaction_builder
             .add_output(
                 10,
@@ -5001,8 +5007,11 @@ mod test {
         let key = mnemonic.derive_slip10_key(0);
         let account_key = AccountKey::from(key);
 
-        let mut transaction_builder =
-            TransactionBuilder::new(0, MockFogResolver::default(), NoMemoBuilder::default());
+        let mut transaction_builder = TransactionBuilder::new(
+            Mob::ID,
+            MockFogResolver::default(),
+            NoMemoBuilder::default(),
+        );
         let (tx_out, _tx_confirmation) = transaction_builder
             .add_output(
                 10,

@@ -202,9 +202,9 @@ mod block_tests {
         encrypted_fog_hint::EncryptedFogHint,
         membership_proofs::Range,
         ring_signature::KeyImage,
-        tokens::{Mob}, Token,
+        tokens::Mob,
         tx::{TxOut, TxOutMembershipElement, TxOutMembershipHash},
-        Block, BlockContents, BlockContentsHash, BlockID, BLOCK_VERSION,
+        Block, BlockContents, BlockContentsHash, BlockID, Token, BLOCK_VERSION,
     };
     use alloc::vec::Vec;
     use core::convert::TryFrom;
@@ -220,7 +220,7 @@ mod block_tests {
             .map(|_i| {
                 let mut result = TxOut::new(
                     rng.next_u64(),
-                    *Mob::ID,
+                    Mob::ID,
                     &recipient.default_subaddress(),
                     &RistrettoPrivate::from_random(rng),
                     EncryptedFogHint::fake_onetime_hint(rng),

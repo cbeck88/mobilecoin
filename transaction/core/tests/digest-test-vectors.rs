@@ -1,7 +1,9 @@
 use mc_account_keys::AccountKey;
 use mc_crypto_digestible_test_utils::*;
 use mc_crypto_keys::RistrettoPrivate;
-use mc_transaction_core::{encrypted_fog_hint::EncryptedFogHint, tx::TxOut, Block, BlockContents};
+use mc_transaction_core::{
+    encrypted_fog_hint::EncryptedFogHint, tokens::Mob, tx::TxOut, Block, BlockContents, Token,
+};
 use mc_util_from_random::FromRandom;
 use rand_core::{RngCore, SeedableRng};
 use rand_hc::Hc128Rng as FixedRng;
@@ -21,7 +23,7 @@ fn test_origin_tx_outs() -> Vec<TxOut> {
         .map(|acct| {
             let mut tx_out = TxOut::new(
                 rng.next_u32() as u64,
-                0,
+                Mob::ID,
                 &acct.default_subaddress(),
                 &RistrettoPrivate::from_random(&mut rng),
                 EncryptedFogHint::fake_onetime_hint(&mut rng),

@@ -788,8 +788,9 @@ pub mod tx_out_store_tests {
         encrypted_fog_hint::{EncryptedFogHint, ENCRYPTED_FOG_HINT_LEN},
         membership_proofs::{hash_leaf, hash_nodes, Range, NIL_HASH},
         onetime_keys::*,
+        tokens::Mob,
         tx::TxOut,
-        Amount, AmountData, MemoPayload,
+        Amount, AmountData, MemoPayload, Token,
     };
     use mc_util_from_random::FromRandom;
     use rand::{rngs::StdRng, SeedableRng};
@@ -822,7 +823,7 @@ pub mod tx_out_store_tests {
         let mut tx_outs: Vec<TxOut> = Vec::new();
         let recipient_account = AccountKey::random(&mut rng);
         let value: u64 = 100;
-        let token_id = 0;
+        let token_id = Mob::ID;
 
         for _i in 0..num_tx_outs {
             let tx_private_key = RistrettoPrivate::from_random(&mut rng);

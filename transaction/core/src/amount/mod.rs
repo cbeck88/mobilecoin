@@ -12,6 +12,7 @@ use crate::{
         AMOUNT_BLINDING_DOMAIN_TAG, AMOUNT_TOKEN_ID_DOMAIN_TAG, AMOUNT_VALUE_DOMAIN_TAG,
     },
     ring_signature::generators,
+    token::TokenId,
 };
 use alloc::vec::Vec;
 use blake2::{Blake2b, Digest};
@@ -39,7 +40,7 @@ pub struct AmountData {
     /// The "raw" value of this amount as a u64
     pub value: u64,
     /// The token-id which is the denomination of this amount
-    pub token_id: u32,
+    pub token_id: TokenId,
 }
 
 /// A commitment to an amount of MobileCoin, denominated in picoMOB.
@@ -76,7 +77,7 @@ impl Amount {
         let blinding: Scalar = get_blinding(shared_secret);
 
         // Pedersen generators
-        let generator = generators(data.token_id);
+        let generator = generators(*data.token_id);
 
         // Pedersen commitment `v*H_i + b*G`.
         let commitment = CompressedCommitment::new(data.value, blinding, &generator);
@@ -87,7 +88,7 @@ impl Amount {
 
         // The value is XORed with the first 8 bytes of the mask.
         // `v XOR_8 Blake2B(value_mask | shared_secret)`
-        let masked_token_id_val: u32 = data.token_id ^ get_token_id_mask(shared_secret);
+        let masked_token_id_val: u32 = *data.token_id ^ get_token_id_mask(shared_secret);
         let masked_token_id = masked_token_id_val.to_le_bytes().to_vec();
 
         Ok(Amount {
@@ -164,12 +165,12 @@ impl Amount {
         masked_token_id: &[u8],
         shared_secret: &RistrettoPublic,
     ) -> Result<(CompressedCommitment, AmountData, Scalar), AmountError> {
-        let token_id: u32 = Self::unmask_token_id(masked_token_id, shared_secret)?;
+        let token_id = TokenId::from(Self::unmask_token_id(masked_token_id, shared_secret)?);
         let value: u64 = Self::unmask_value(masked_value, shared_secret);
         let blinding = get_blinding(shared_secret);
 
         // Pedersen generators
-        let generator = generators(token_id);
+        let generator = generators(*token_id);
 
         let expected_commitment = CompressedCommitment::new(value, blinding, &generator);
 
@@ -263,7 +264,7 @@ mod amount_tests {
                 value in any::<u64>(),
                 token_id in any::<u32>(),
                 shared_secret in arbitrary_ristretto_public()) {
-                    let amount_data = AmountData { value, token_id };
+                    let amount_data = AmountData { value, token_id: token_id.into() };
                 assert!(Amount::new(amount_data, &shared_secret).is_ok());
             }
 
@@ -274,7 +275,7 @@ mod amount_tests {
                 value in any::<u64>(),
                 token_id in any::<u32>(),
                 shared_secret in arbitrary_ristretto_public()) {
-                    let amount_data = AmountData { value, token_id };
+                    let amount_data = AmountData { value, token_id: token_id.into() };
                     let amount = Amount::new(amount_data, &shared_secret).unwrap();
                     let blinding = get_blinding(&shared_secret);
                     let expected_commitment = CompressedCommitment::new(value, blinding.into(), &generators(token_id));
@@ -288,7 +289,7 @@ mod amount_tests {
                 token_id in any::<u32>(),
                 shared_secret in arbitrary_ristretto_public())
             {
-                let amount_data = AmountData { value, token_id };
+                let amount_data = AmountData { value, token_id: token_id.into() };
                 let amount = Amount::new(amount_data, &shared_secret).unwrap();
                 assert_eq!(
                     value,
@@ -302,7 +303,7 @@ mod amount_tests {
                 value in any::<u64>(),
                 token_id in any::<u32>(),
                 shared_secret in arbitrary_ristretto_public()) {
-                let amount_data = AmountData { value, token_id };
+                let amount_data = AmountData { value, token_id: token_id.into() };
                 let amount = Amount::new(amount_data.clone(), &shared_secret).unwrap();
                 let result = amount.get_value(&shared_secret);
                 let blinding = get_blinding(&shared_secret);
@@ -321,7 +322,7 @@ mod amount_tests {
             {
                 // Mutate amount to use a different masked value.
                 // With high probability, amount.masked_value won't equal other_masked_value.
-                let amount_data = AmountData { value, token_id };
+                let amount_data = AmountData { value, token_id: token_id.into() };
                 let mut amount = Amount::new(amount_data, &shared_secret).unwrap();
                 amount.masked_value = other_masked_value;
                 let result = amount.get_value(&shared_secret);
@@ -337,7 +338,7 @@ mod amount_tests {
                 shared_secret in arbitrary_ristretto_public(),
                 other_shared_secret in arbitrary_ristretto_public(),
             ) {
-                let amount_data = AmountData { value, token_id };
+                let amount_data = AmountData { value, token_id: token_id.into() };
                 let amount = Amount::new(amount_data,  &shared_secret).unwrap();
                 let result = amount.get_value(&other_shared_secret);
                 let expected = Err(AmountError::InconsistentCommitment);

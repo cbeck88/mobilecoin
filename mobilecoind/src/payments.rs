@@ -764,7 +764,7 @@ impl<T: BlockchainConnection + UserTxConnection + 'static, FPR: FogPubkeyResolve
         };
 
         // FIXME: Should take a token id as a parameter and not assume mob
-        let token_id = 0;
+        let token_id = Mob::ID;
 
         // Create tx_builder.
         let mut tx_builder =
@@ -965,7 +965,7 @@ mod test {
 
         let tx_out = TxOut::new(
             1,
-            0,
+            Mob::ID,
             &alice.default_subaddress(),
             &tx_secret_key_for_txo,
             Default::default(),

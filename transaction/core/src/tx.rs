@@ -25,7 +25,7 @@ use crate::{
     memo::{EncryptedMemo, MemoPayload},
     onetime_keys::{create_shared_secret, create_tx_out_public_key, create_tx_out_target_key},
     ring_signature::{KeyImage, SignatureRctBulletproofs},
-    CompressedCommitment, NewMemoError, NewTxError,
+    CompressedCommitment, NewMemoError, NewTxError, TokenId,
 };
 
 /// Transaction hash length, in bytes.
@@ -297,7 +297,7 @@ impl TxOut {
     /// * `hint` - Encrypted Fog hint for this output.
     pub fn new(
         value: u64,
-        token_id: u32,
+        token_id: TokenId,
         recipient: &PublicAddress,
         tx_private_key: &RistrettoPrivate,
         hint: EncryptedFogHint,
@@ -325,7 +325,7 @@ impl TxOut {
     ///   MemoPayload, or a NewMemo error
     pub fn new_with_memo(
         value: u64,
-        token_id: u32,
+        token_id: TokenId,
         recipient: &PublicAddress,
         tx_private_key: &RistrettoPrivate,
         hint: EncryptedFogHint,
@@ -597,7 +597,7 @@ mod tests {
             let public_key = RistrettoPublic::from_random(&mut rng).into();
             let amount_data = AmountData {
                 value: 23u64,
-                token_id: 0,
+                token_id: Mob::ID,
             };
             let amount = Amount::new(amount_data, &shared_secret).unwrap();
             TxOut {
@@ -660,7 +660,7 @@ mod tests {
             let public_key = RistrettoPublic::from_random(&mut rng).into();
             let amount_data = AmountData {
                 value: 23u64,
-                token_id: 0,
+                token_id: Mob::ID,
             };
             let amount = Amount::new(amount_data, &shared_secret).unwrap();
             TxOut {
@@ -728,8 +728,14 @@ mod tests {
             let tx_private_key = RistrettoPrivate::from_random(&mut rng);
 
             // A tx out with an empty memo
-            let mut tx_out =
-                TxOut::new(13u64, 0, &bob_addr, &tx_private_key, Default::default()).unwrap();
+            let mut tx_out = TxOut::new(
+                13u64,
+                Mob::ID,
+                &bob_addr,
+                &tx_private_key,
+                Default::default(),
+            )
+            .unwrap();
             assert!(
                 tx_out.e_memo.is_some(),
                 "All TxOut (except preexisting) should have a memo"
@@ -764,7 +770,7 @@ mod tests {
             // A tx out with a memo
             let tx_out = TxOut::new_with_memo(
                 13u64,
-                0,
+                Mob::ID,
                 &bob_addr,
                 &tx_private_key,
                 Default::default(),
@@ -798,7 +804,7 @@ mod tests {
             // A tx out with a memo
             let tx_out = TxOut::new_with_memo(
                 13u64,
-                0,
+                Mob::ID,
                 &bob.change_subaddress(),
                 &tx_private_key,
                 Default::default(),

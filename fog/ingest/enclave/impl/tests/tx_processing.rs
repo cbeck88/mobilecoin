@@ -16,7 +16,9 @@ use mc_oblivious_traits::HeapORAMStorageCreator;
 use mc_transaction_core::{
     encrypted_fog_hint::EncryptedFogHint,
     fog_hint::{FogHint, PlaintextArray},
+    tokens::Mob,
     tx::TxOut,
+    Token,
 };
 use mc_util_from_random::FromRandom;
 use mc_util_logger_macros::test_with_logger;
@@ -27,7 +29,7 @@ use std::collections::HashMap;
 #[test_with_logger]
 fn test_ingest_enclave(logger: Logger) {
     mc_util_test_helper::run_with_several_seeds(|mut rng| {
-        let token_id = 0;
+        let token_id = Mob::ID;
         // make alice and bob
         let alice_account = AccountKey::random_with_fog(&mut rng);
         let bob_account = AccountKey::random_with_fog(&mut rng);
@@ -208,7 +210,7 @@ fn test_ingest_enclave_malformed_txos(logger: Logger) {
 
         let bob_public_address = bob_account.default_subaddress();
 
-        let token_id = 0;
+        let token_id = Mob::ID;
 
         // make some tx outs
         let tx_outs: Vec<_> = (0..40usize)
@@ -322,7 +324,7 @@ fn test_ingest_enclave_overflow(logger: Logger) {
     let alice_public_address = alice_account.default_subaddress();
     let bob_public_address = bob_account.default_subaddress();
 
-    let token_id = 0;
+    let token_id = Mob::ID;
 
     // Repeat the test 5 times to try to smoke out failures
     let repetitions = 5;

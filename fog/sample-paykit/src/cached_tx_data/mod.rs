@@ -30,7 +30,7 @@ use mc_transaction_core::{
     onetime_keys::{recover_onetime_private_key, recover_public_subaddress_spend_key},
     ring_signature::KeyImage,
     tx::TxOut,
-    BlockIndex,
+    BlockIndex, TokenId,
 };
 use mc_transaction_std::MemoType;
 use mc_util_telemetry::{telemetry_static_key, tracer, Key, TraceContextExt, Tracer};
@@ -835,7 +835,7 @@ pub struct OwnedTxOut {
     pub value: u64,
     /// The token id of the TxOut, compute when we matches this tx out
     /// successfully against our account key.
-    pub token_id: u32,
+    pub token_id: TokenId,
     /// The subaddress index this tx_out was sent to.
     pub subaddress_index: u64,
     /// The key image that we computed when matching this tx_out against our

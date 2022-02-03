@@ -9,7 +9,6 @@ pub use opentelemetry::{
 
 use opentelemetry::{
     global::{tracer_provider, BoxedTracer},
-    sdk::{trace::Config, Resource},
     trace::{SpanBuilder, TraceId, TracerProvider},
 };
 use std::borrow::Cow;
@@ -88,6 +87,7 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "jaeger")] {
         use displaydoc::Display;
         use opentelemetry::{trace::TraceError, KeyValue, sdk};
+        use opentelemetry::sdk::{trace::Config, Resource};
 
         #[derive(Debug, Display)]
         pub enum Error {

@@ -575,7 +575,7 @@ fn build_transaction_helper<T: RngCore + CryptoRng, FPR: FogPubkeyResolver>(
     }
 
     // FIXME: This should take a token id as an argument, and not assume MOB
-    let token_id = 0;
+    let token_id = Mob::ID;
     // Use the RTHMemoBuilder if memos are enabled, NoMemoBuilder otherwise
     let mut tx_builder = if use_rth_memos {
         let mut memo_builder = RTHMemoBuilder::default();

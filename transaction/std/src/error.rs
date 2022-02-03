@@ -3,7 +3,7 @@
 use displaydoc::Display;
 use mc_fog_report_validation::FogPubkeyError;
 use mc_transaction_core::{
-    ring_signature, ring_signature::Error, AmountError, NewMemoError, NewTxError,
+    ring_signature, ring_signature::Error, AmountError, NewMemoError, NewTxError, TokenId,
 };
 
 /// An error that can occur when using the TransactionBuilder
@@ -25,7 +25,7 @@ pub enum TxBuilderError {
     BadAmount(AmountError),
 
     /// Input had wrong token id: Expected {0}, Found {1}
-    WrongTokenType(u32, u32),
+    WrongTokenType(TokenId, TokenId),
 
     /// New Tx: {0}
     NewTx(NewTxError),

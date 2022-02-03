@@ -491,7 +491,7 @@ fn build_tx(
     assert_eq!(utxos_with_proofs.len(), rings.len());
 
     // Assume MOB token
-    let token_id = 0;
+    let token_id = Mob::ID;
 
     // Create tx_builder. No fog reports.
     let mut tx_builder =

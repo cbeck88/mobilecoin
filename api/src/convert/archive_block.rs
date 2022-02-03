@@ -121,8 +121,9 @@ mod tests {
         encrypted_fog_hint::ENCRYPTED_FOG_HINT_LEN,
         membership_proofs::Range,
         ring_signature::KeyImage,
+        tokens::Mob,
         tx::{TxOut, TxOutMembershipElement, TxOutMembershipHash},
-        Amount, AmountData, Block, BlockContents, BlockData, BlockID, BlockSignature,
+        Amount, AmountData, Block, BlockContents, BlockData, BlockID, BlockSignature, Token,
     };
     use mc_util_from_random::FromRandom;
     use rand::{rngs::StdRng, SeedableRng};
@@ -135,7 +136,7 @@ mod tests {
         for block_idx in 0..num_blocks {
             let amount_data = AmountData {
                 value: 1u64 << 13,
-                token_id: 0,
+                token_id: Mob::ID,
             };
             let tx_out = TxOut {
                 amount: Amount::new(amount_data, &RistrettoPublic::from_random(&mut rng)).unwrap(),

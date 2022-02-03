@@ -87,8 +87,11 @@ pub fn create_transaction_with_amount<L: Ledger, R: RngCore + CryptoRng>(
     tombstone_block: BlockIndex,
     rng: &mut R,
 ) -> Tx {
-    let mut transaction_builder =
-        TransactionBuilder::new(0, MockFogResolver::default(), EmptyMemoBuilder::default());
+    let mut transaction_builder = TransactionBuilder::new(
+        Mob::ID,
+        MockFogResolver::default(),
+        EmptyMemoBuilder::default(),
+    );
 
     // The first transaction in the origin block should contain enough outputs to
     // use as mixins.
@@ -206,7 +209,7 @@ pub fn initialize_ledger<L: Ledger, R: RngCore + CryptoRng>(
                     .map(|_i| {
                         let mut tx_out = TxOut::new(
                             value,
-                            0,
+                            Mob::ID,
                             &account_key.default_subaddress(),
                             &RistrettoPrivate::from_random(rng),
                             Default::default(),
@@ -299,7 +302,7 @@ pub fn get_outputs<T: RngCore + CryptoRng>(
         .map(|(recipient, value)| {
             let mut result = TxOut::new(
                 *value,
-                *Mob::ID,
+                Mob::ID,
                 recipient,
                 &RistrettoPrivate::from_random(rng),
                 Default::default(),

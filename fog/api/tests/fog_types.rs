@@ -441,7 +441,7 @@ impl Sample for Amount {
     fn sample<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
         let amount_data = AmountData {
             value: rng.next_u32() as u64,
-            token_id: rng.next_u32(),
+            token_id: rng.next_u32().into(),
         };
         Amount::new(amount_data, &RistrettoPublic::from_random(rng)).unwrap()
     }
