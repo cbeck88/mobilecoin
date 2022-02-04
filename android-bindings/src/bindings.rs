@@ -1154,7 +1154,12 @@ pub unsafe extern "C" fn Java_com_mobilecoin_lib_TransactionBuilder_init_1jni(
         // TODO: After servers that support memos are deployed, use RTHMemoBuilder here
         let memo_builder = NoMemoBuilder::default();
         // FIXME: The token id should be a parameter and not hard coded to Mob here
-        let tx_builder = TransactionBuilder::new(Mob::ID, fog_resolver.clone(), memo_builder);
+        // FIXME: The block version should be a parameter -- it usually should be the
+        // "latest" block version on the blockchain. Fog will start telling you
+        // what that is.
+        let block_version = 1;
+        let tx_builder =
+            TransactionBuilder::new(block_version, Mob::ID, fog_resolver.clone(), memo_builder);
         Ok(env.set_rust_field(obj, RUST_OBJ_FIELD, tx_builder)?)
     })
 }

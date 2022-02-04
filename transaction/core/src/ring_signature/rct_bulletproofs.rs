@@ -27,7 +27,24 @@ use crate::{
     Commitment, CompressedCommitment, CompressedProofOfOpening, ProofOfOpening,
 };
 
-/// An RCT_TYPE_BULLETPROOFS_2 signature, plus a proof of opening.
+/// An RCT_TYPE_BULLETPROOFS_2 signature, plus optionally a proof of opening.
+///
+/// Proofs of opening are required to support confidential token ids. The
+/// proof of opening confirms that token ids are not being mixed in a
+/// transaction, without revealing any of the commitments.
+///
+/// A signature without a proof of opening is an "old-style" signature.
+/// It will fail verification unless `token_id = 0`.
+/// (Separately from this verification, such a Tx should be rejected unless
+/// every input and output is an old-style TxOut without masked_token_id.
+/// This is because if any of the inputs or outputs are masked token ids,
+/// we cannot be sure that someone is not maliciously mixing token ids.)
+///
+/// A signature with a proof of opening is a "new-style" signature.
+/// It may pass verification with a nonzero token id, if the proof of opening
+/// checks out.
+/// (Separately from this verification, such a Tx should be rejected unless
+/// every output is a new-style TxOut with masked token id.)
 #[derive(Clone, Digestible, Eq, PartialEq, Serialize, Deserialize, Message)]
 pub struct SignatureRctBulletproofs {
     /// Signature for each input ring.
@@ -48,14 +65,22 @@ pub struct SignatureRctBulletproofs {
     /// Proof that all pseudo outputs are over the specified Pedersen
     /// generators. This implies that all confidential token ids are of the
     /// correct type.
-    #[prost(message, required, tag = "4")]
-    pub proof_of_opening: CompressedProofOfOpening,
+    /// If present, then this is a new-style Tx.
+    ///
+    /// If omitted, then this is an old-style Tx.
+    ///
+    /// In the future we may make this field required and drop support for
+    /// old-style Tx.
+    #[prost(message, optional, tag = "4")]
+    pub proof_of_opening: Option<CompressedProofOfOpening>,
 }
 
 impl SignatureRctBulletproofs {
     /// Sign.
     ///
     /// # Arguments
+    /// * `block_version` - The block-version we should target for this
+    ///   signature
     /// * `message` - The messages to be signed, e.g. Hash(TxPrefix).
     /// * `rings` - One or more rings of one-time addresses and amount
     ///   commitments.
@@ -66,6 +91,7 @@ impl SignatureRctBulletproofs {
     ///   amount commitment.
     /// * `fee` - Value of the implicit fee output.
     pub fn sign<CSPRNG: RngCore + CryptoRng>(
+        block_version: u32,
         message: &[u8; 32],
         rings: &[Vec<(CompressedRistrettoPublic, CompressedCommitment)>],
         real_input_indices: &[usize],
@@ -85,6 +111,8 @@ impl SignatureRctBulletproofs {
             token_id,
             true,
             true,
+            // We enable building proof of opening if block_version > 1
+            block_version > 1,
             rng,
         )
     }
@@ -192,27 +220,36 @@ impl SignatureRctBulletproofs {
             }
         }
 
-        // Extend the message with the range proof and pseudo_output_commitments.
-        let extended_message_digest = extend_message(
+        // Extend the message with the range proof and pseudo_output_commitments, and
+        // proof of opening if present
+        let extended_message = compute_extended_message_either_version(
             message,
             &self.pseudo_output_commitments,
             &self.range_proof_bytes,
-            &self.proof_of_opening,
+            self.proof_of_opening.as_ref(),
         );
 
         // Each MLSAG must be valid.
         for (i, ring) in rings.iter().enumerate() {
             let ring_signature = &self.ring_signatures[i];
             let pseudo_output = self.pseudo_output_commitments[i];
-            ring_signature.verify(&extended_message_digest, ring, &pseudo_output)?;
+            ring_signature.verify(&extended_message, ring, &pseudo_output)?;
         }
 
         // Verify proof of opening against sum of pseudo outputs
-        {
-            let proof_of_opening = ProofOfOpening::try_from(&self.proof_of_opening)?;
+        if let Some(proof_of_opening) = self.proof_of_opening.as_ref() {
+            let proof_of_opening = ProofOfOpening::try_from(proof_of_opening)?;
             if !proof_of_opening.verify(&sum_of_pseudo_output_commitments, &generator) {
                 return Err(Error::InvalidProofOfOpening);
             }
+        } else if token_id != 0 {
+            // Backwards compat: If proof of opening is omitted, then this is an old-style
+            // Tx, and the token id must be 0.
+            // We must ALSO ensure that all inputs and outputs are old style TxOut's that
+            // do not have masked token id,
+            // but that happens in transaction validation layer, since this layer can't
+            // see the TxOut's.
+            return Err(Error::MissingProofOfOpening);
         }
 
         // Signature is valid.
@@ -252,6 +289,7 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
     token_id: u32,
     check_value_is_preserved: bool,
     check_proof_of_opening: bool,
+    use_proof_of_opening: bool,
     rng: &mut CSPRNG,
 ) -> Result<SignatureRctBulletproofs, Error> {
     if rings.is_empty() {
@@ -327,13 +365,16 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         .map(|(value, _)| Scalar::from(*value))
         .sum();
 
-    let proof_of_opening: CompressedProofOfOpening = {
+    // Build a proof of opening if enabled
+    let proof_of_opening: Option<CompressedProofOfOpening> = if use_proof_of_opening {
         let proof = ProofOfOpening::new(
             sum_of_pseudo_output_values,
             sum_of_pseudo_output_blindings + last_blinding,
             &generator,
         );
-        (&proof).into()
+        Some((&proof).into())
+    } else {
+        None
     };
 
     if check_value_is_preserved {
@@ -363,14 +404,15 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         .map(CompressedCommitment::from)
         .collect();
 
-    if check_proof_of_opening {
+    if use_proof_of_opening && check_proof_of_opening {
         let sum_of_pseudo_output_commitments = commitments
             .iter()
             .take(num_inputs)
             .filter_map(|x| x.decompress())
             .sum();
 
-        let proof_of_opening = ProofOfOpening::try_from(&proof_of_opening).unwrap();
+        let proof_of_opening =
+            ProofOfOpening::try_from(proof_of_opening.as_ref().unwrap()).unwrap();
         if !proof_of_opening.verify(&sum_of_pseudo_output_commitments, &generator) {
             return Err(Error::InvalidProofOfOpening);
         }
@@ -379,11 +421,12 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
     // Extend the message with the range proof and pseudo_output_commitments.
     // This ensures that they are signed by each RingMLSAG.
     let range_proof_bytes = range_proof.to_bytes();
-    let extended_message_digest = extend_message(
+
+    let extended_message = compute_extended_message_either_version(
         message,
         &pseudo_output_commitments,
         &range_proof_bytes,
-        &proof_of_opening,
+        proof_of_opening.as_ref(),
     );
 
     // Prove that the signer is allowed to spend a public key in each ring, and that
@@ -393,7 +436,7 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         let real_index = real_input_indices[i];
         let (onetime_private_key, value, blinding) = input_secrets[i];
         let ring_signature = RingMLSAG::sign(
-            &extended_message_digest,
+            &extended_message,
             &rings[i],
             real_index,
             &onetime_private_key,
@@ -414,9 +457,49 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
     })
 }
 
+/// Toggles between old-style and new-style extended message
+fn compute_extended_message_either_version(
+    message: &[u8],
+    pseudo_output_commitments: &[CompressedCommitment],
+    range_proof_bytes: &[u8],
+    maybe_proof_of_opening: Option<&CompressedProofOfOpening>,
+) -> Vec<u8> {
+    if let Some(proof_of_opening) = maybe_proof_of_opening {
+        // New-style extended message using merlin
+        digest_extended_message(
+            message,
+            &pseudo_output_commitments,
+            &range_proof_bytes,
+            proof_of_opening,
+        )
+        .to_vec()
+    } else {
+        // Old-style extended message
+        extend_message(message, &pseudo_output_commitments, &range_proof_bytes)
+    }
+}
+
+/// Concatenates [message || pseudo_output_commitments || range_proof].
+/// (old-style Tx's)
+fn extend_message(
+    message: &[u8],
+    pseudo_output_commitments: &[CompressedCommitment],
+    range_proof_bytes: &[u8],
+) -> Vec<u8> {
+    let mut extended_message: Vec<u8> = Vec::with_capacity(
+        message.len() + pseudo_output_commitments.len() * 32 + range_proof_bytes.len(),
+    );
+    extended_message.extend_from_slice(message);
+    for commitment in pseudo_output_commitments {
+        extended_message.extend_from_slice(commitment.as_ref());
+    }
+    extended_message.extend_from_slice(range_proof_bytes);
+    extended_message
+}
+
 /// Computes a merlin digest of message, pseudo_output_commitments, range proof,
 /// proof_of_opening
-fn extend_message(
+fn digest_extended_message(
     message: &[u8],
     pseudo_output_commitments: &[CompressedCommitment],
     range_proof_bytes: &[u8],
@@ -556,6 +639,7 @@ mod rct_bulletproofs_tests {
             rng: &mut RNG,
         ) -> Result<SignatureRctBulletproofs, Error> {
             SignatureRctBulletproofs::sign(
+                2,
                 &self.message,
                 &self.rings,
                 &self.real_input_indices,
@@ -582,6 +666,7 @@ mod rct_bulletproofs_tests {
                 self.token_id,
                 false,
                 false,
+                true,
                 rng,
             )
         }

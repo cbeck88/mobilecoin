@@ -2807,7 +2807,9 @@ mod test {
 
         // Insert into database.
         let monitor_id = mobilecoind_db.add_monitor(&data).unwrap();
+        let block_version = 1;
         let mut transaction_builder = TransactionBuilder::new(
+            block_version,
             Mob::ID,
             MockFogResolver::default(),
             NoMemoBuilder::default(),
@@ -4896,7 +4898,10 @@ mod test {
         let root_id = RootIdentity::from(&root_entropy);
         let account_key = AccountKey::from(&root_id);
 
+        let block_version = 1;
+
         let mut transaction_builder = TransactionBuilder::new(
+            block_version,
             Mob::ID,
             MockFogResolver::default(),
             NoMemoBuilder::default(),
@@ -5007,7 +5012,10 @@ mod test {
         let key = mnemonic.derive_slip10_key(0);
         let account_key = AccountKey::from(key);
 
+        let block_version = 1;
+
         let mut transaction_builder = TransactionBuilder::new(
+            block_version,
             Mob::ID,
             MockFogResolver::default(),
             NoMemoBuilder::default(),

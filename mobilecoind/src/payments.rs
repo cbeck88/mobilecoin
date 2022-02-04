@@ -766,9 +766,17 @@ impl<T: BlockchainConnection + UserTxConnection + 'static, FPR: FogPubkeyResolve
         // FIXME: Should take a token id as a parameter and not assume mob
         let token_id = Mob::ID;
 
+        // FIXME: The block version should be a parameter -- it usually should be the
+        // "latest" block version on the blockchain.
+        let block_version = 1;
+
         // Create tx_builder.
-        let mut tx_builder =
-            TransactionBuilder::new(token_id, fog_resolver, NoMemoBuilder::default());
+        let mut tx_builder = TransactionBuilder::new(
+            block_version,
+            token_id,
+            fog_resolver,
+            NoMemoBuilder::default(),
+        );
 
         tx_builder
             .set_fee(fee)

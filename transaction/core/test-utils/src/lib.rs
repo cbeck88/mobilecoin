@@ -87,7 +87,10 @@ pub fn create_transaction_with_amount<L: Ledger, R: RngCore + CryptoRng>(
     tombstone_block: BlockIndex,
     rng: &mut R,
 ) -> Tx {
+    // This should perhaps be a parameter
+    let block_version = 2;
     let mut transaction_builder = TransactionBuilder::new(
+        block_version,
         Mob::ID,
         MockFogResolver::default(),
         EmptyMemoBuilder::default(),
@@ -217,6 +220,8 @@ pub fn initialize_ledger<L: Ledger, R: RngCore + CryptoRng>(
                         .expect("Could not create origin block TxOut");
                         // The origin block did not historically have memo fields
                         tx_out.e_memo = None;
+                        // The origin block did not historically have masked token id
+                        tx_out.amount.masked_token_id = Default::default();
                         tx_out
                     })
                     .collect();

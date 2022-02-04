@@ -54,6 +54,9 @@ pub enum Error {
 
     /// Invalid Proof Of Opening, this may indicate a problem with token ids
     InvalidProofOfOpening,
+
+    /// Missing Proof of Opening, this is required when using nonzero token_id
+    MissingProofOfOpening,
 }
 
 impl From<mc_util_repr_bytes::LengthMismatch> for Error {

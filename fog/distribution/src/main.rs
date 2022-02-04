@@ -502,9 +502,16 @@ fn build_tx(
     // Assume MOB token
     let token_id = Mob::ID;
 
+    // Assume block version
+    let block_version = 1;
+
     // Create tx_builder.
-    let mut tx_builder =
-        TransactionBuilder::new(token_id, fog_resolver, EmptyMemoBuilder::default());
+    let mut tx_builder = TransactionBuilder::new(
+        block_version,
+        token_id,
+        fog_resolver,
+        EmptyMemoBuilder::default(),
+    );
 
     tx_builder.set_fee(FEE.load(Ordering::SeqCst)).unwrap();
 

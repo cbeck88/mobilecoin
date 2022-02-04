@@ -65,6 +65,7 @@ mod tests {
         };
 
         let mut transaction_builder = TransactionBuilder::new(
+            2, // test version 2 block serialization
             Mob::ID,
             MockFogResolver::default(),
             EmptyMemoBuilder::default(),

@@ -326,7 +326,12 @@ pub extern "C" fn mc_transaction_builder_create(
         // Enable recoverable transaction history by configuring an RTHMemoBuilder
         let memo_builder = NoMemoBuilder::default();
         // TODO: Take a token id option here instead of passing 0 (MOB)
-        let mut transaction_builder = TransactionBuilder::new(Mob::ID, fog_resolver, memo_builder);
+        // FIXME: The block version should be a parameter -- it usually should be the
+        // "latest" block version on the blockchain. Fog will start telling you
+        // what that is.
+        let block_version = 1;
+        let mut transaction_builder =
+            TransactionBuilder::new(block_version, Mob::ID, fog_resolver, memo_builder);
         transaction_builder
             .set_fee(fee)
             .expect("failure not expected");

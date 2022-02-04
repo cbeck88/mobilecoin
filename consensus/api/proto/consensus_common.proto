@@ -76,6 +76,9 @@ enum ProposeTxResult {
     KeyError = 38;
     UnsortedInputs = 39;
     MissingMemo = 40;
+    MissingMaskedTokenId = 41;
+    MaskedTokenIdNotAllowed = 42;
+    InvalidTokenId = 43;
 }
 
 /// Response from TxPropose RPC call.

@@ -27,7 +27,9 @@ impl From<&SignatureRctBulletproofs> for external::SignatureRctBulletproofs {
 
         signature.set_range_proofs(source.range_proof_bytes.clone());
 
-        signature.set_proof_of_opening((&source.proof_of_opening).into());
+        if let Some(proof) = source.proof_of_opening.as_ref() {
+            signature.set_proof_of_opening(proof.into());
+        }
 
         signature
     }
@@ -50,7 +52,11 @@ impl TryFrom<&external::SignatureRctBulletproofs> for SignatureRctBulletproofs {
 
         let range_proof_bytes = source.get_range_proofs().to_vec();
 
-        let proof_of_opening = CompressedProofOfOpening::try_from(source.get_proof_of_opening())?;
+        let proof_of_opening = if let Some(proof) = source.proof_of_opening.as_ref() {
+            Some(CompressedProofOfOpening::try_from(proof)?)
+        } else {
+            None
+        };
 
         Ok(SignatureRctBulletproofs {
             ring_signatures,

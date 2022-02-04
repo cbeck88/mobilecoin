@@ -125,6 +125,17 @@ pub enum TransactionValidationError {
 
     /// A TxOut is missing the required memo field
     MissingMemo,
+
+    /// A TxOut is missing the masked token id field, which is required here
+    MissingMaskedTokenId,
+
+    /// A TxOut has a masked token id field, but this is invalid in old-style
+    /// transactions. You may need to update your software
+    MaskedTokenIdNotAllowed,
+
+    /// This Tx indicates that it is using a token id that is not valid at this
+    /// time.
+    InvalidTokenId,
 }
 
 impl From<mc_crypto_keys::KeyError> for TransactionValidationError {

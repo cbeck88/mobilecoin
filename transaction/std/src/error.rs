@@ -47,6 +47,18 @@ pub enum TxBuilderError {
 
     /// Memo: {0}
     Memo(NewMemoError),
+
+    /// Block version ({0}) is too old to be supported, try targetting a newer
+    /// version
+    BlockVersionTooOld(u32),
+
+    /// Block version ({0}) is too new to be supported, try upgrading your
+    /// software
+    BlockVersionTooNew(u32),
+
+    /// Tried to build a token_id = {0} Tx with Block Version = {1}, but this
+    /// requires targetting a block version >= {2}
+    TokenIdRequiresNewerBlockVersion(TokenId, u32, u32),
 }
 
 impl From<mc_util_serial::encode::Error> for TxBuilderError {

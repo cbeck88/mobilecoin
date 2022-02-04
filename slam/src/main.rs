@@ -493,9 +493,16 @@ fn build_tx(
     // Assume MOB token
     let token_id = Mob::ID;
 
+    // Assume block version
+    let block_version = 1;
+
     // Create tx_builder. No fog reports.
-    let mut tx_builder =
-        TransactionBuilder::new(token_id, FogResolver::default(), NoMemoBuilder::default());
+    let mut tx_builder = TransactionBuilder::new(
+        block_version,
+        token_id,
+        FogResolver::default(),
+        NoMemoBuilder::default(),
+    );
 
     tx_builder
         .set_fee(FEE.load(Ordering::SeqCst))

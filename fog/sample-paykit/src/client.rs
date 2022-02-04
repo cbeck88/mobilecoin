@@ -576,16 +576,22 @@ fn build_transaction_helper<T: RngCore + CryptoRng, FPR: FogPubkeyResolver>(
 
     // FIXME: This should take a token id as an argument, and not assume MOB
     let token_id = Mob::ID;
+
+    // FIXME: The block version should be a parameter -- it usually should be the
+    // "latest" block version on the blockchain. Fog will start telling you what
+    // that is.
+    let block_version = 1;
+
     // Use the RTHMemoBuilder if memos are enabled, NoMemoBuilder otherwise
     let mut tx_builder = if use_rth_memos {
         let mut memo_builder = RTHMemoBuilder::default();
         memo_builder.set_sender_credential(SenderMemoCredential::from(source_account_key));
         memo_builder.enable_destination_memo();
 
-        TransactionBuilder::new(token_id, fog_resolver, memo_builder)
+        TransactionBuilder::new(block_version, token_id, fog_resolver, memo_builder)
     } else {
         let memo_builder = NoMemoBuilder::default();
-        TransactionBuilder::new(token_id, fog_resolver, memo_builder)
+        TransactionBuilder::new(block_version, token_id, fog_resolver, memo_builder)
     };
     tx_builder.set_fee(fee)?;
 

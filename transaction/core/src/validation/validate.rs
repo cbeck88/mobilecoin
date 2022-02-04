@@ -10,8 +10,9 @@ use super::error::{TransactionValidationError, TransactionValidationResult};
 use crate::{
     constants::*,
     membership_proofs::{derive_proof_at_index, is_membership_proof_valid},
+    tokens::Mob,
     tx::{Tx, TxOut, TxOutMembershipProof, TxPrefix},
-    CompressedCommitment,
+    CompressedCommitment, Token,
 };
 use mc_common::HashSet;
 use mc_crypto_keys::CompressedRistrettoPublic;
@@ -38,10 +39,6 @@ pub fn validate<R: RngCore + CryptoRng>(
 
     validate_number_of_outputs(&tx.prefix, MAX_OUTPUTS)?;
 
-    // Bring this back in Issue #905 (Make memos mandatory)
-    // https://github.com/mobilecoinfoundation/mobilecoin/issues/905
-    // validate_memos_exist(tx)?;
-
     validate_ring_sizes(&tx.prefix, RING_SIZE)?;
 
     validate_ring_elements_are_unique(&tx.prefix)?;
@@ -64,6 +61,23 @@ pub fn validate<R: RngCore + CryptoRng>(
 
     // Note: The transaction must not contain a Key Image that has previously been
     // spent. This must be checked outside the enclave.
+
+    // Proof-of-opening iff token ids means that we accept EITHER:
+    // old-style Tx's, without token ids or proofs of opening anywhere
+    // new-style Tx's, with proofs of opening and all outputs having masked token
+    // id.
+    //
+    // In a future revision we may drop support for the old-style Tx's.
+    // Then this rule would become "ensure all outputs have masked token ids",
+    // and the signature would always require a proof of opening.
+    //
+    // TODO: It may be good to take a BLOCK_VERSION parameter here at runtime
+    // and then stop accepting old-style Tx when the BLOCK_VERSION >= 2.
+    validate_proof_of_opening_iff_masked_token_ids(tx)?;
+
+    // Bring this back in Issue #905 (Make memos mandatory)
+    // https://github.com/mobilecoinfoundation/mobilecoin/issues/905
+    // validate_memos_exist(tx)?;
 
     Ok(())
 }
@@ -190,6 +204,39 @@ fn validate_outputs_public_keys_are_unique(tx: &Tx) -> TransactionValidationResu
     for public_key in tx.output_public_keys() {
         if !uniques.insert(public_key) {
             return Err(TransactionValidationError::DuplicateOutputPublicKey);
+        }
+    }
+    Ok(())
+}
+
+/// Validate that:
+/// * If a proof of opening is not present, then all inputs and outputs are
+///   missing the masked_token_id's, and the tx_prefix.token_id == 0. (Old-style
+///   Tx => Old-style inputs and outputs.)
+/// * If a proof of opening is present, then all outputs have masked token ids.
+///   (New-style Tx => New-style outputs.)
+fn validate_proof_of_opening_iff_masked_token_ids(tx: &Tx) -> TransactionValidationResult<()> {
+    if tx.signature.proof_of_opening.is_some() {
+        for output in tx.prefix.outputs.iter() {
+            if output.amount.masked_token_id.len() != 4 {
+                return Err(TransactionValidationError::MissingMaskedTokenId);
+            }
+        }
+    } else {
+        if tx.prefix.token_id != *Mob::ID {
+            return Err(TransactionValidationError::InvalidTokenId);
+        }
+        for input in tx.prefix.inputs.iter() {
+            for mixin in input.ring.iter() {
+                if !mixin.amount.masked_token_id.is_empty() {
+                    return Err(TransactionValidationError::MaskedTokenIdNotAllowed);
+                }
+            }
+        }
+        for output in tx.prefix.outputs.iter() {
+            if !output.amount.masked_token_id.is_empty() {
+                return Err(TransactionValidationError::MaskedTokenIdNotAllowed);
+            }
         }
     }
     Ok(())
