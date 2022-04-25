@@ -4,7 +4,7 @@ use crate::{EmptyMemoBuilder, InputCredentials, MemoPayload, TransactionBuilder,
 use core::convert::TryFrom;
 use mc_account_keys::{AccountKey, PublicAddress, DEFAULT_SUBADDRESS_INDEX};
 use mc_crypto_keys::RistrettoPublic;
-use mc_fog_report_validation_test_utils::FogPubkeyResolver;
+use mc_fog_report_validation::FogPubkeyResolver;
 use mc_transaction_core::{
     onetime_keys::*,
     tokens::Mob,
@@ -151,7 +151,7 @@ pub fn get_input_credentials<RNG: CryptoRng + RngCore, FPR: FogPubkeyResolver>(
     .unwrap()
 }
 
-// Uses TransactionBuilder to build a transaction.
+/// Uses TransactionBuilder to build a transaction, for testing purposes.
 pub fn get_transaction<RNG: RngCore + CryptoRng, FPR: FogPubkeyResolver + Clone>(
     block_version: BlockVersion,
     token_id: TokenId,

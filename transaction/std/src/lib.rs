@@ -10,8 +10,10 @@ extern crate core;
 mod change_destination;
 mod error;
 mod input_credentials;
+mod input_materials;
 mod memo;
 mod memo_builder;
+mod signed_contingent_input_builder;
 mod transaction_builder;
 
 #[cfg(any(test, feature = "test-only"))]
@@ -26,6 +28,7 @@ pub use memo::{
     UnusedMemo,
 };
 pub use memo_builder::{EmptyMemoBuilder, MemoBuilder, RTHMemoBuilder};
+pub use signed_contingent_input_builder::SignedContingentInputBuilder;
 pub use transaction_builder::{DefaultTxOutputsOrdering, TransactionBuilder, TxOutputsOrdering};
 
 // Re-export this to help the exported macros work
