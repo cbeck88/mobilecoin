@@ -50,14 +50,52 @@ pub struct OutputSecret {
     pub blinding: Scalar,
 }
 
+/// A pseudo-output is an intermediate construct between an input (TxIn) and
+/// an output (TxOut).
+///
+/// When a TxIn is signed using a RingMLSAG, a pseudo-output is produced, which
+/// is a commitment to the same amount as the truly spent input, but with a
+/// different blinding factor. (This is needed for the pseudo-output not to
+/// reveal the true input.)
+///
+/// The pseudo-output commitment is revealed to the enclave as part of the Tx.
+/// The enclave checks that it is correctly derived via the MLSAG, by verifying
+/// the MLSAG. The enclave checks that the transaction is balanced by adding
+/// the pseudo output commitments, and checking that this is equal to the sum of
+/// the output commitments and the fee. Each output and pseudo-output must also
+/// be range-proofed to ensure that curve25519 wrap-around semantics do not come
+/// into play during this sum.
+///
+/// The TxPseudoOutput contains the data needed about an individual
+/// pseudo-output for these verification steps.
+#[derive(Clone, Digestible, Eq, PartialEq, Serialize, Deserialize, Message)]
+pub struct TxPseudoOutput {
+    /// The ring signature, which confers spending authority for the
+    /// pseudo-output
+    #[prost(message, required, tag = "1")]
+    ring_signature: RingMLSAG,
+
+    /// The pseudo-output commitment (which matches the value of the true input)
+    #[prost(message, required, tag = "2")]
+    commitment: CompressedCommitment,
+
+    /// The pseudo-output token id. This is required for range proofing.
+    #[prost(fixed64, tag = "3")]
+    token_id: u64,
+}
+
 /// An RCT_TYPE_BULLETPROOFS_2 signature
 #[derive(Clone, Digestible, Eq, PartialEq, Serialize, Deserialize, Message)]
 pub struct SignatureRctBulletproofs {
     /// Signature for each input ring.
+    ///
+    /// Note: This is EMPTY if mixed transactions are enabled
     #[prost(message, repeated, tag = "1")]
     pub ring_signatures: Vec<RingMLSAG>,
 
     /// Commitments of value equal to each real input.
+    ///
+    /// Note: This is EMPTY if mixed transactions are enabled
     #[prost(message, repeated, tag = "2")]
     pub pseudo_output_commitments: Vec<CompressedCommitment>,
 
@@ -75,17 +113,22 @@ pub struct SignatureRctBulletproofs {
     ///
     /// The range proofs correspond to the sorted order of token ids used.
     ///
-    /// Note: This is EMPTY if mixed transactions is not enabled
+    /// Note: This is EMPTY if mixed transactions are not enabled
     #[prost(bytes, repeated, tag = "4")]
     pub range_proofs: Vec<Vec<u8>>,
 
-    /// Token id for each pseudo_output. This must have the same length as
-    /// `pseudo_output_commitments`, after mixed transactions feature.
-    #[prost(fixed64, repeated, tag = "5")]
-    pub pseudo_output_token_ids: Vec<u64>,
+    /// The pseudo-outputs and corresponding RingMLSAG for each input this
+    /// transaction. This must have the same length as `prefix.inputs`,
+    /// after mixed transactions feature.
+    ///
+    /// Note: This is EMPTY if mixed transactions are not enabled
+    #[prost(message, repeated, tag = "5")]
+    pub pseudo_outputs: Vec<TxPseudoOutput>,
 
     /// Token id for each output. This must have the same length as
-    /// `prefix.outputs`, after mixed transactions feature
+    /// `prefix.outputs`, after mixed transactions feature.
+    ///
+    /// Note: This is EMPTY if mixed transactions are not enabled
     #[prost(fixed64, repeated, tag = "6")]
     pub output_token_ids: Vec<u64>,
 }
@@ -153,33 +196,40 @@ impl SignatureRctBulletproofs {
             return Err(Error::TokenIdNotAllowed);
         }
 
-        // Signature must contain one ring signature for each ring.
-        if rings.len() != self.ring_signatures.len() {
-            return Err(Error::LengthMismatch(
-                rings.len(),
-                self.ring_signatures.len(),
-            ));
-        }
-
-        // Signature must contain one pseudo_output for each ring.
-        if rings.len() != self.pseudo_output_commitments.len() {
-            return Err(Error::LengthMismatch(
-                rings.len(),
-                self.pseudo_output_commitments.len(),
-            ));
-        }
-
         // pseudo output token ids must be provided if mixed transactions is enabled
         if block_version.mixed_transactions_are_supported() {
-            if self.pseudo_output_commitments.len() != self.pseudo_output_token_ids.len() {
-                return Err(Error::MissingPseudoOutputTokenIds);
+            if self.pseudo_outputs.len() != rings.len() {
+                return Err(Error::MissingPseudoOutputs);
             }
             if output_commitments.len() != self.output_token_ids.len() {
                 return Err(Error::MissingOutputTokenIds);
             }
+
+            if !self.rings.is_empty() {
+                return Err(Error::PseudoOutputsMustBeUsed);
+            }
+            if !self.pseudo_output_commitment.is_empty() {
+                return Err(Error::PseudoOutputsMustBeUsed);
+            }
         } else {
-            if !self.pseudo_output_token_ids.is_empty() {
-                return Err(Error::PseudoOutputTokenIdsNotAllowed);
+            // Signature must contain one ring signature for each ring.
+            if rings.len() != self.ring_signatures.len() {
+                return Err(Error::LengthMismatch(
+                    rings.len(),
+                    self.ring_signatures.len(),
+                ));
+            }
+
+            // Signature must contain one pseudo_output for each ring.
+            if rings.len() != self.pseudo_output_commitments.len() {
+                return Err(Error::LengthMismatch(
+                    rings.len(),
+                    self.pseudo_output_commitments.len(),
+                ));
+            }
+
+            if !self.pseudo_outputs.is_empty() {
+                return Err(Error::PseudoOutputsNotAllowed);
             }
             if !self.output_token_ids.is_empty() {
                 return Err(Error::OutputTokenIdsNotAllowed);
@@ -213,22 +263,11 @@ impl SignatureRctBulletproofs {
             decompressed_pseudo_output_commitments.push(commitment);
         }
 
-        // Collect list of of unique token ids
-        let token_ids = {
-            let mut token_ids = BTreeSet::default();
-            token_ids.insert(fee.token_id);
-            for token_id in &self.output_token_ids {
-                token_ids.insert(token_id.into());
-            }
-            for token_id in &self.pseudo_output_token_ids {
-                token_ids.insert(token_id.into());
-            }
-            token_ids
-        };
-
         // Get a generator cache
         let mut generator_cache = GeneratorCache::default();
 
+        // Range proof checking
+        //
         // pseudo_output_commitments and output commitments must be in [0, 2^64).
         // this is done differently depending on if mixed transactions are supported
         if !block_version.mixed_transactions_are_supported() {
@@ -238,6 +277,7 @@ impl SignatureRctBulletproofs {
                 return Err(Error::TooManyRangeProofs);
             }
 
+            // Everything is assumed to be on fee-token id before mixed transactions
             let generator = generator_cache.get(fee.token_id);
             let commitments: Vec<CompressedRistretto> = self
                 .pseudo_output_commitments
@@ -257,6 +297,20 @@ impl SignatureRctBulletproofs {
             if !self.range_proof_bytes.is_empty() {
                 return Err(Error::UnexpectedRangeProof);
             }
+
+            // Collect list of of unique token ids
+            let token_ids = {
+                let mut token_ids = BTreeSet::default();
+                token_ids.insert(fee.token_id);
+                for token_id in &self.output_token_ids {
+                    token_ids.insert(token_id.into());
+                }
+                for token_id in &self.pseudo_output_token_ids {
+                    token_ids.insert(token_id.into());
+                }
+                token_ids
+            };
+
             if token_ids.len() != self.range_proofs.len() {
                 return Err(Error::MissingRangeProofs(
                     token_ids.len(),
@@ -270,9 +324,9 @@ impl SignatureRctBulletproofs {
                 let generator = generator_cache.get(*token_id);
 
                 let commitments: Vec<CompressedRistretto> = self
-                    .pseudo_output_commitments
+                    .pseudo_outputs
                     .iter()
-                    .zip(self.pseudo_output_token_ids.iter())
+                    .map(|pseudo_output| (pseudo_output.commitment, pseudo_output.token_id))
                     .chain(output_commitments.iter().zip(self.output_token_ids.iter()))
                     .filter_map(|(compressed_commitment, this_token_id)| {
                         if token_id == this_token_id {
@@ -295,15 +349,15 @@ impl SignatureRctBulletproofs {
             }
         }
 
-        // Compute sum of pseudo outputs
-        let sum_of_pseudo_output_commitments: RistrettoPoint =
-            decompressed_pseudo_output_commitments
-                .iter()
-                .map(|commitment| commitment.point)
-                .sum();
-
         // Output commitments - pseudo_outputs must be zero.
         {
+            // Compute sum of pseudo outputs
+            let sum_of_pseudo_output_commitments: RistrettoPoint =
+                decompressed_pseudo_output_commitments
+                    .iter()
+                    .map(|commitment| commitment.point)
+                    .sum();
+
             let sum_of_output_commitments: RistrettoPoint = decompressed_output_commitments
                 .iter()
                 .map(|commitment| commitment.point)
@@ -331,10 +385,22 @@ impl SignatureRctBulletproofs {
         );
 
         // Each MLSAG must be valid.
-        for (i, ring) in rings.iter().enumerate() {
-            let ring_signature = &self.ring_signatures[i];
-            let pseudo_output = self.pseudo_output_commitments[i];
-            ring_signature.verify(&extended_message_digest, ring, &pseudo_output)?;
+        // After mixed transactions, these appear in self.pseudo_outputs, before that,
+        // they appear in self.ring_signatures.
+        if !block_version.mixed_transactions_are_supported() {
+            for (i, ring) in rings.iter().enumerate() {
+                let ring_signature = &self.ring_signatures[i];
+                let pseudo_output = self.pseudo_output_commitments[i];
+                ring_signature.verify(&extended_message_digest, ring, &pseudo_output)?;
+            }
+        } else {
+            for (ring, pseudo_output) in rings.iter().zip(self.pseudo_outputs.iter()) {
+                pseudo_output.ring_signature.verify(
+                    &extended_message_digest,
+                    ring,
+                    &pseudo_output.commitment,
+                )?;
+            }
         }
 
         // Signature is valid.
@@ -343,9 +409,17 @@ impl SignatureRctBulletproofs {
 
     /// Key images spent by this signature.
     pub fn key_images(&self) -> Vec<KeyImage> {
+        // We must pull key images from both self.ring_signatures and
+        // self.pseudo_output, in order to work both before and after mixed
+        // transactions
         self.ring_signatures
             .iter()
             .map(|mlsag| mlsag.key_image)
+            .chain(
+                self.pseudo_outputs
+                    .iter()
+                    .map(|pseudo_output| pseudo_output.mlsag.key_image),
+            )
             .collect()
     }
 }
@@ -614,6 +688,8 @@ fn sign_with_balance_check<CSPRNG: RngCore + CryptoRng>(
         assert!(!range_proof.is_empty());
         assert!(range_proofs.is_empty());
     } else {
+        ring_signatures_clear();
+        pseudo_output_commitments.clear();
         assert!(range_proof.is_empty());
         assert!(!range_proofs.is_empty());
     }
