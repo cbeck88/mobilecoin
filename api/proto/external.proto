@@ -246,18 +246,41 @@ message TxPrefix {
     fixed64 fee_token_id = 5;
 }
 
+// A RingMLSAG is a signature conferring spending authority for a particular input,
+// out of a "ring" of mixed-in inputs.
+//
+// To enable double-spend prevention, a RingMLSAG includes a key-image which is
+// unique to the truly-spent input. The key image cannot be linked back to the true input,
+// but the true input cannot be signed in any way that produces a different key image.
+// KeyImages are tracked in the ledger to prevent an input from being spent more than once.
 message RingMLSAG {
     CurveScalar c_zero = 1;
     repeated CurveScalar responses = 2;
     KeyImage key_image = 3;
 }
 
+// To facilitate balance proofing later, a RingMLSAG produces a "pseudo-output commitment".
+// The pseudo-output commitment is a commitment to the same value as the true (spent) input,
+// but with a different blinding factor. Proving that a transaction is balanced uses the
+// homomorphic property of Pedersen commitments, to check that the sum of pseudo outputs
+// equals the sum of the outputs.
+//
+// Each output and pseudo-output requires range-proofing to ensure that overflow is not
+// happening during that sum. For this, each pseudo output requires a token id.
+message TxPseudoOutput {
+    RingMLSAG ring_signature = 1;
+    CompressedRistretto pseudo_output_commitment = 2;
+    fixed64 pseudo_output_token_id = 3;
+}
+
+// A RingCT bulletproofs signature. This signs a TxPrefix, proving that a MobileCoin transaction
+// is well-formed, was properly authorized, and does not create or destroy value.
 message SignatureRctBulletproofs {
     repeated RingMLSAG ring_signatures = 1;
     repeated CompressedRistretto pseudo_output_commitments = 2;
     bytes range_proof_bytes = 3;
     repeated bytes range_proofs = 4;
-    repeated fixed64 pseudo_output_token_ids = 5;
+    repeated TxPseudoOutput pseudo_outputs = 5;
     repeated fixed64 output_token_ids = 6;
 }
 
