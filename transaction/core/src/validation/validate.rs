@@ -11,10 +11,9 @@ use crate::{
     constants::*,
     membership_proofs::{derive_proof_at_index, is_membership_proof_valid},
     tx::{Tx, TxOut, TxOutMembershipProof, TxPrefix},
-    Amount, BlockVersion, CompressedCommitment, TokenId,
+    Amount, BlockVersion, TokenId,
 };
 use mc_common::HashSet;
-use mc_crypto_keys::CompressedRistrettoPublic;
 use rand_core::{CryptoRng, RngCore};
 
 /// Determines if the transaction is valid, with respect to the provided
@@ -84,6 +83,12 @@ pub fn validate<R: RngCore + CryptoRng>(
 
     if block_version.validate_transaction_outputs_are_sorted() {
         validate_outputs_are_sorted(&tx.prefix)?;
+    }
+
+    if block_version.signed_input_rules_are_supported() {
+        validate_all_input_rules(block_version, tx)?;
+    } else {
+        validate_no_input_rules_exist(tx)?;
     }
 
     Ok(())
@@ -189,7 +194,7 @@ fn validate_ring_elements_are_unique(tx_prefix: &TxPrefix) -> TransactionValidat
 }
 
 /// Elements in a ring must be sorted.
-fn validate_ring_elements_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidationResult<()> {
+pub fn validate_ring_elements_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidationResult<()> {
     for tx_in in &tx_prefix.inputs {
         check_sorted(
             &tx_in.ring,
@@ -203,7 +208,7 @@ fn validate_ring_elements_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidat
 
 /// Inputs must be sorted by the public key of the first ring element of each
 /// input.
-fn validate_inputs_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidationResult<()> {
+pub fn validate_inputs_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidationResult<()> {
     check_sorted(
         &tx_prefix.inputs,
         |a, b| {
@@ -213,7 +218,8 @@ fn validate_inputs_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidationResu
     )
 }
 
-fn validate_outputs_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidationResult<()> {
+/// Outputs must be sorted by the tx public key
+pub fn validate_outputs_are_sorted(tx_prefix: &TxPrefix) -> TransactionValidationResult<()> {
     check_sorted(
         &tx_prefix.outputs,
         |a, b| a.public_key < b.public_key,
@@ -285,18 +291,7 @@ pub fn validate_signature<R: RngCore + CryptoRng>(
     tx: &Tx,
     rng: &mut R,
 ) -> TransactionValidationResult<()> {
-    let rings: Vec<Vec<(CompressedRistrettoPublic, CompressedCommitment)>> = tx
-        .prefix
-        .inputs
-        .iter()
-        .map(|input| {
-            input
-                .ring
-                .iter()
-                .map(|tx_out| (tx_out.target_key, tx_out.masked_amount.commitment))
-                .collect()
-        })
-        .collect();
+    let rings = tx.prefix.get_input_rings();
 
     let output_commitments = tx.prefix.output_commitments();
 
@@ -457,6 +452,29 @@ pub fn validate_tombstone(
     Ok(())
 }
 
+/// Any input rules imposed on the Tx must satisfied
+pub fn validate_all_input_rules(
+    block_version: BlockVersion,
+    tx: &Tx,
+) -> TransactionValidationResult<()> {
+    for input in tx.prefix.inputs.iter() {
+        if let Some(rules) = input.input_rules.as_ref() {
+            rules.verify(block_version, tx)?;
+        }
+    }
+    Ok(())
+}
+
+/// Any input rules imposed on the Tx must satisfied
+pub fn validate_no_input_rules_exist(tx: &Tx) -> TransactionValidationResult<()> {
+    for input in tx.prefix.inputs.iter() {
+        if input.input_rules.is_some() {
+            return Err(TransactionValidationError::InputRulesNotAllowed);
+        }
+    }
+    Ok(())
+}
+
 fn check_sorted<T>(
     values: &[T],
     ordered: fn(&T, &T) -> bool,
@@ -496,7 +514,7 @@ mod tests {
         tokens::Mob,
         tx::{Tx, TxOutMembershipHash, TxOutMembershipProof},
         validation::error::TransactionValidationError,
-        Token,
+        InputRules, Token,
     };
 
     use crate::membership_proofs::Range;
@@ -1373,6 +1391,52 @@ mod tests {
                     false => Ok(()),
                 }
             )
+        }
+    }
+
+    // Test that input rules validation is working
+    #[test]
+    fn test_input_rules_validation() {
+        let block_version = BlockVersion::THREE;
+
+        for _ in 0..3 {
+            let (mut tx, _ledger) = create_test_tx(block_version);
+
+            // Check that the Tx is following input rules (vacuously)
+            validate_all_input_rules(block_version, &tx).unwrap();
+
+            // Modify the Tx to have some input rules.
+            // (This invalidates the signature, but we aren't checking that here)
+            let first_tx_out = tx.prefix.outputs[0].clone();
+
+            // Declare the first tx out as a required output
+            tx.prefix.inputs[0].input_rules = Some(InputRules {
+                required_outputs: vec![first_tx_out],
+                max_tombstone_block: 0,
+            });
+
+            // Check that the Tx is following input rules (vacuously)
+            validate_all_input_rules(block_version, &tx).unwrap();
+
+            // Modify the input rules to refer to a non-existent tx out
+            let rules = tx.prefix.inputs[0].input_rules.as_mut().unwrap();
+            rules.required_outputs[0].masked_amount.masked_value += 1;
+
+            assert!(validate_all_input_rules(block_version, &tx).is_err());
+
+            // Set masked value back, now modify tombstone block
+            let rules = tx.prefix.inputs[0].input_rules.as_mut().unwrap();
+            rules.required_outputs[0].masked_amount.masked_value -= 1;
+            rules.max_tombstone_block = tx.prefix.tombstone_block - 1;
+
+            assert!(validate_all_input_rules(block_version, &tx).is_err());
+
+            // Set the tombstone block limit to be more permissive, now everything should be
+            // good
+            let rules = tx.prefix.inputs[0].input_rules.as_mut().unwrap();
+            rules.max_tombstone_block = tx.prefix.tombstone_block;
+
+            validate_all_input_rules(block_version, &tx).unwrap();
         }
     }
 }
