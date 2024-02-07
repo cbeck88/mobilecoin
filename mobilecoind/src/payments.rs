@@ -1659,6 +1659,7 @@ mod test {
                 attempted_spend_height: 0,
                 attempted_spend_tombstone: 0,
                 token_id: *token_id,
+                memo_payload: vec![],
             })
             .collect()
     }
