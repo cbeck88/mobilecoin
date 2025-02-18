@@ -206,6 +206,7 @@ impl TryInto<MintValidationError> for MintValidationResult {
 
 /// Convert mc_ledger_db::ActiveMintConfig -->
 /// consensus_config::ActiveMintConfig
+#[cfg(feature="false")]
 impl From<&mc_ledger_db::ActiveMintConfig> for consensus_config::ActiveMintConfig {
     fn from(src: &mc_ledger_db::ActiveMintConfig) -> Self {
         let mut dst = Self::new();
@@ -217,6 +218,7 @@ impl From<&mc_ledger_db::ActiveMintConfig> for consensus_config::ActiveMintConfi
 
 /// Convert consensus_config::ActiveMintConfig -->
 /// mc_ledger_db::ActiveMintConfig
+#[cfg(feature="false")]
 impl TryFrom<&consensus_config::ActiveMintConfig> for mc_ledger_db::ActiveMintConfig {
     type Error = ConversionError;
 
@@ -231,6 +233,7 @@ impl TryFrom<&consensus_config::ActiveMintConfig> for mc_ledger_db::ActiveMintCo
 
 /// Convert mc_ledger_db::ActiveMintConfigs -->
 /// consensus_config::ActiveMintConfigs
+#[cfg(feature="false")]
 impl From<&mc_ledger_db::ActiveMintConfigs> for consensus_config::ActiveMintConfigs {
     fn from(src: &mc_ledger_db::ActiveMintConfigs) -> Self {
         let mut dst = Self::new();
@@ -242,6 +245,7 @@ impl From<&mc_ledger_db::ActiveMintConfigs> for consensus_config::ActiveMintConf
 
 /// Convert consensus_config::ActiveMintConfigs -->
 /// mc_ledger_db::ActiveMintConfigs
+#[cfg(feature="false")]
 impl TryFrom<&consensus_config::ActiveMintConfigs> for mc_ledger_db::ActiveMintConfigs {
     type Error = ConversionError;
 

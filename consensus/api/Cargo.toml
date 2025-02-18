@@ -12,7 +12,7 @@ rust-version = { workspace = true }
 [dependencies]
 mc-api = { path = "../../api" }
 mc-attest-api = { path = "../../attest/api" }
-mc-ledger-db = { path = "../../ledger/db" }
+#mc-ledger-db = { path = "../../ledger/db" }
 mc-transaction-core = { path = "../../transaction/core" }
 
 futures = "0.3"
